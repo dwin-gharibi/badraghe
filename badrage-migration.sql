@@ -358,7 +358,8 @@ CREATE TABLE bus_features (
     FOREIGN KEY (feature_id) REFERENCES features(id) ON DELETE CASCADE
 );
 
-
+CREATE INDEX idx_user_reservations_status ON user_reservations(status);
+CREATE INDEX idx_travel_tickets_transport_type ON travel_tickets(id);
 CREATE INDEX idx_user_reservations_reserved_at ON user_reservations(reserved_at);
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_phone ON users(phone);
