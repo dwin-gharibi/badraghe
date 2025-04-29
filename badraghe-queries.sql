@@ -83,3 +83,7 @@ WHERE (
     FROM user_reservations ur 
     WHERE ur.user_id = u.id AND ur.status = 'paid'
 ) >= 2;
+
+-- Query 20
+DELETE FROM user_reservations 
+WHERE status = 'canceled';
