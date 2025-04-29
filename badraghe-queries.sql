@@ -116,3 +116,16 @@ SET tt.price = tt.price * 0.9
 WHERE fd.airline_name = 'MahanAir' 
 AND ur.reserved_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
 AND ur.reserved_at < CURDATE();
+
+-- Query 22
+CREATE TEMPORARY TABLE temp_report_counts AS
+SELECT category, COUNT(*) AS report_count
+FROM reports
+GROUP BY category;
+
+SELECT category, report_count
+FROM temp_report_counts
+ORDER BY report_count DESC
+LIMIT 1;
+
+DROP TEMPORARY TABLE temp_report_counts;
