@@ -359,6 +359,7 @@ CREATE TABLE bus_features (
 );
 
 
+CREATE INDEX idx_user_reservations_reserved_at ON user_reservations(reserved_at);
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_phone ON users(phone);
 CREATE INDEX idx_roles_name ON roles(name);
