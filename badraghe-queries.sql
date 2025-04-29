@@ -84,6 +84,20 @@ WHERE (
     WHERE ur.user_id = u.id AND ur.status = 'paid'
 ) >= 2;
 
+-- Query 18
+SET @top_canceler_id = (
+    SELECT user_id
+    FROM user_reservations
+    WHERE status = 'canceled'
+    GROUP BY user_id
+    ORDER BY COUNT(*) DESC
+    LIMIT 1
+);
+
+UPDATE users 
+SET last_name = 'Redington'
+WHERE id = @top_canceler_id;
+
 -- Query 19
 DELETE ur FROM user_reservations ur
 JOIN users u ON ur.user_id = u.id
