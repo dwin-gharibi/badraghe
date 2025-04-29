@@ -64,3 +64,11 @@ AND ur.status = 'paid'
 GROUP BY u.id
 ORDER BY tickets_purchased DESC
 LIMIT 3;
+
+-- Query 11
+SELECT 
+    STRAIGHT_JOIN u.first_name, u.last_name
+FROM roles r
+JOIN user_role ur ON r.id = ur.role_id
+JOIN users u ON ur.user_id = u.id
+WHERE r.name = 'Support';
