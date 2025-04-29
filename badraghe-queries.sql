@@ -94,6 +94,16 @@ WHERE (
     WHERE ur.user_id = u.id AND ur.status = 'paid'
 ) >= 2;
 
+-- Query 15
+SELECT 
+    tt.*,
+    ur.reserved_at
+FROM travel_tickets tt
+JOIN user_reservations ur FORCE INDEX (idx_user_reservations_reserved_at) ON tt.id = ur.ticket_id
+WHERE ur.reserved_at >= CURDATE()
+AND ur.reserved_at < CURDATE() + INTERVAL 1 DAY
+ORDER BY ur.reserved_at;
+
 -- Query 18
 SET @top_canceler_id = (
     SELECT user_id
