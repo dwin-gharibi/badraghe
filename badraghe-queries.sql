@@ -19,3 +19,23 @@ FROM users u
 JOIN user_reservations ur FORCE INDEX (idx_user_reservations_reserved_at) ON u.id = ur.user_id
 ORDER BY ur.reserved_at DESC
 LIMIT 1;
+-- Query 6
+SET @avg_payments = (
+    SELECT AVG(total_payments)
+    FROM (
+        SELECT SUM(amount) AS total_payments
+        FROM payments
+        GROUP BY user_id
+    ) avg_payments
+);
+
+SELECT
+    u.email,
+    u.phone
+FROM users u
+JOIN (
+    SELECT user_id, SUM(amount) AS total_payments
+    FROM payments
+    GROUP BY user_id
+    HAVING total_payments > @avg_payments
+) higher_users ON u.id = higher_users.user_id;
