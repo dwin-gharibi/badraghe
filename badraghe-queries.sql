@@ -51,3 +51,16 @@ FROM travel_tickets tt FORCE INDEX (idx_travel_tickets_transport_type)
 JOIN user_reservations ur FORCE INDEX (idx_user_reservations_status) ON tt.id = ur.ticket_id
 WHERE ur.status != 'canceled'
 GROUP BY tt.transport_type;
+
+-- Query 8
+SELECT 
+    u.first_name,
+    u.last_name,
+    COUNT(*) AS tickets_purchased
+FROM users u
+JOIN user_reservations ur FORCE INDEX (idx_user_reservations_status) ON u.id = ur.user_id
+WHERE ur.reserved_at >= DATE_SUB(NOW(), INTERVAL 1 WEEK)
+AND ur.status = 'paid'
+GROUP BY u.id
+ORDER BY tickets_purchased DESC
+LIMIT 3;
