@@ -72,3 +72,14 @@ FROM roles r
 JOIN user_role ur ON r.id = ur.role_id
 JOIN users u ON ur.user_id = u.id
 WHERE r.name = 'Support';
+
+-- Query 12
+SELECT 
+    u.first_name,
+    u.last_name
+FROM users u
+WHERE (
+    SELECT COUNT(*) 
+    FROM user_reservations ur 
+    WHERE ur.user_id = u.id AND ur.status = 'paid'
+) >= 2;
