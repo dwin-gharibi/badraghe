@@ -65,6 +65,16 @@ GROUP BY u.id
 ORDER BY tickets_purchased DESC
 LIMIT 3;
 
+-- Query 10
+SELECT DISTINCT tt.departure_city
+FROM travel_tickets tt
+JOIN user_reservations ur ON tt.id = ur.ticket_id
+WHERE ur.user_id = (
+    SELECT id FROM users 
+    ORDER BY created_at ASC 
+    LIMIT 1
+);
+
 -- Query 11
 SELECT 
     STRAIGHT_JOIN u.first_name, u.last_name
