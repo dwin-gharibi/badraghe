@@ -107,3 +107,12 @@ AND ur.status = 'canceled';
 -- Query 20
 DELETE FROM user_reservations 
 WHERE status = 'canceled';
+
+-- Query 21
+UPDATE travel_tickets tt
+STRAIGHT_JOIN flight_details fd ON tt.id = fd.ticket_id
+STRAIGHT_JOIN user_reservations ur ON tt.id = ur.ticket_id
+SET tt.price = tt.price * 0.9
+WHERE fd.airline_name = 'MahanAir' 
+AND ur.reserved_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+AND ur.reserved_at < CURDATE();
