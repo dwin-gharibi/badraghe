@@ -84,6 +84,12 @@ WHERE (
     WHERE ur.user_id = u.id AND ur.status = 'paid'
 ) >= 2;
 
+-- Query 19
+DELETE ur FROM user_reservations ur
+JOIN users u ON ur.user_id = u.id
+WHERE u.last_name = 'Redington' 
+AND ur.status = 'canceled';
+
 -- Query 20
 DELETE FROM user_reservations 
 WHERE status = 'canceled';
