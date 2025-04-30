@@ -27,6 +27,21 @@ STRAIGHT_JOIN payments p FORCE INDEX (idx_payments_user_id) ON u.id = p.user_id
 GROUP BY u.id, month
 ORDER BY u.id, month;
 
+-- Query 4
+SELECT 
+    u.first_name,
+    u.last_name,
+    tt.departure_city
+FROM users u
+JOIN (
+    SELECT user_id, departure_city
+    FROM user_reservations ur
+    JOIN travel_tickets tt FORCE INDEX (idx_travel_tickets_departure_city) ON ur.ticket_id = tt.id
+    GROUP BY user_id, departure_city
+    HAVING COUNT(*) = 1
+) single_tickets ON u.id = single_tickets.user_id
+JOIN travel_tickets tt ON single_tickets.departure_city = tt.departure_city;
+
 -- Query 5
 SELECT 
     u.*
