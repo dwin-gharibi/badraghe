@@ -182,6 +182,29 @@ SELECT id, departure_city, arrival_city, sales_count
 FROM ranked_tickets
 WHERE sales_rank = 2;
 
+-- Quert 17
+WITH support_cancel_stats AS (
+    SELECT 
+        u.id,
+        u.first_name,
+        u.last_name,
+        COUNT(*) AS cancel_count
+    FROM ticket_cancellations tc
+    JOIN users u ON tc.canceled_by = u.id
+    JOIN user_role ur ON u.id = ur.user_id
+    JOIN roles r ON ur.role_id = r.id
+    WHERE r.name = 'Support'
+    GROUP BY u.id
+)
+SELECT 
+    first_name,
+    last_name,
+    cancel_count,
+    cancel_count * 100.0 / (SELECT SUM(cancel_count) FROM support_cancel_stats) AS cancel_percentage
+FROM support_cancel_stats
+ORDER BY cancel_count DESC
+LIMIT 1;
+
 -- Query 18
 SET @top_canceler_id = (
     SELECT user_id
