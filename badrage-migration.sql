@@ -358,7 +358,23 @@ CREATE TABLE bus_features (
     FOREIGN KEY (feature_id) REFERENCES features(id) ON DELETE CASCADE
 );
 
+CREATE TABLE ticket_cancellations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    reservation_id BIGINT UNSIGNED NOT NULL,
+    canceled_by BIGINT UNSIGNED NOT NULL,
+    cancellation_reason TEXT NOT NULL,
+    cancellation_choice ENUM('change_of_plans', 'price_issue', 'delay', 'duplicate_booking', 'other') DEFAULT 'other',
+    canceled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (reservation_id) REFERENCES user_reservations(id) ON DELETE CASCADE,
+    FOREIGN KEY (canceled_by) REFERENCES users(id) ON DELETE CASCADE
+);
+
 ALTER TABLE travel_tickets ADD FULLTEXT INDEX idx_fulltext_departure_city (departure_city);
+CREATE INDEX idx_ticket_cancellations_reservation_id ON ticket_cancellations(reservation_id);
+CREATE INDEX idx_ticket_cancellations_canceled_by ON ticket_cancellations(canceled_by);
 CREATE INDEX idx_user_reservations_status ON user_reservations(status);
 CREATE INDEX idx_travel_tickets_transport_type ON travel_tickets(id);
 CREATE INDEX idx_user_reservations_reserved_at ON user_reservations(reserved_at);
