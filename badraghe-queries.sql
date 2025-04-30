@@ -165,6 +165,23 @@ WHERE ur.reserved_at >= CURDATE()
 AND ur.reserved_at < CURDATE() + INTERVAL 1 DAY
 ORDER BY ur.reserved_at;
 
+-- Query 16
+WITH ranked_tickets AS (
+    SELECT 
+        tt.id,
+        tt.departure_city,
+        tt.arrival_city,
+        COUNT(*) AS sales_count,
+        DENSE_RANK() OVER (ORDER BY COUNT(*) DESC) AS sales_rank
+    FROM travel_tickets tt
+    JOIN user_reservations ur ON tt.id = ur.ticket_id
+    WHERE ur.status = 'paid'
+    GROUP BY tt.id
+)
+SELECT id, departure_city, arrival_city, sales_count
+FROM ranked_tickets
+WHERE sales_rank = 2;
+
 -- Query 18
 SET @top_canceler_id = (
     SELECT user_id
