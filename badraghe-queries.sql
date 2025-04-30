@@ -132,6 +132,18 @@ WHERE (
     WHERE ur.user_id = u.id AND ur.status = 'paid'
 ) >= 2;
 
+-- Query 13
+SELECT 
+    u.first_name,
+    u.last_name,
+    tt.transport_type,
+    COUNT(*) AS ticket_count
+FROM users u
+JOIN user_reservations ur ON u.id = ur.user_id
+JOIN travel_tickets tt FORCE INDEX (idx_travel_tickets_transport_type) ON ur.ticket_id = tt.id
+GROUP BY u.id, tt.transport_type
+HAVING COUNT(*) <= 2;
+
 -- Query 15
 SELECT 
     tt.*,
