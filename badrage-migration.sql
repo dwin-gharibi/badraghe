@@ -358,6 +358,7 @@ CREATE TABLE bus_features (
     FOREIGN KEY (feature_id) REFERENCES features(id) ON DELETE CASCADE
 );
 
+ALTER TABLE travel_tickets ADD FULLTEXT INDEX idx_fulltext_departure_city (departure_city);
 CREATE INDEX idx_user_reservations_status ON user_reservations(status);
 CREATE INDEX idx_travel_tickets_transport_type ON travel_tickets(id);
 CREATE INDEX idx_user_reservations_reserved_at ON user_reservations(reserved_at);

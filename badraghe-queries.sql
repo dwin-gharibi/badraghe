@@ -93,6 +93,16 @@ GROUP BY u.id
 ORDER BY tickets_purchased DESC
 LIMIT 3;
 
+-- Query 9
+SELECT 
+    tt.departure_city,
+    COUNT(*) AS tickets_sold
+FROM travel_tickets tt USE INDEX (idx_fulltext_departure_city)
+JOIN user_reservations ur ON tt.id = ur.ticket_id
+WHERE MATCH(tt.departure_city) AGAINST('Tehran' IN BOOLEAN MODE)
+AND ur.status != 'canceled'
+GROUP BY tt.departure_city;
+
 -- Query 10
 SELECT DISTINCT tt.departure_city
 FROM travel_tickets tt
