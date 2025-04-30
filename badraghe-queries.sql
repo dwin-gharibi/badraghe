@@ -14,6 +14,19 @@ WHERE EXISTS (
     WHERE ur.user_id = u.id
 );
 
+-- Query 3
+SELECT 
+    u.id,
+    u.first_name,
+    u.last_name,
+    u.email,
+    DATE_FORMAT(p.payment_date, '%Y-%m') AS month,
+    SUM(p.amount) AS total_payments
+FROM users u
+STRAIGHT_JOIN payments p FORCE INDEX (idx_payments_user_id) ON u.id = p.user_id
+GROUP BY u.id, month
+ORDER BY u.id, month;
+
 -- Query 5
 SELECT 
     u.*
