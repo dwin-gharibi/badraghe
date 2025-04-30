@@ -144,6 +144,17 @@ JOIN travel_tickets tt FORCE INDEX (idx_travel_tickets_transport_type) ON ur.tic
 GROUP BY u.id, tt.transport_type
 HAVING COUNT(*) <= 2;
 
+-- Query 14
+SELECT DISTINCT u.email, u.phone
+FROM users u
+JOIN (
+    SELECT ur.user_id
+    FROM user_reservations ur
+    JOIN travel_tickets tt ON ur.ticket_id = tt.id
+    GROUP BY ur.user_id
+    HAVING COUNT(DISTINCT tt.transport_type) = 3
+) all_types ON u.id = all_types.user_id;
+
 -- Query 15
 SELECT 
     tt.*,
