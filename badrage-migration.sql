@@ -372,6 +372,9 @@ CREATE TABLE ticket_cancellations (
     FOREIGN KEY (canceled_by) REFERENCES users(id) ON DELETE CASCADE
 );
 
+ALTER TABLE users ADD FULLTEXT INDEX idx_fulltext_users_name (first_name, last_name);
+ALTER TABLE travel_tickets ADD FULLTEXT INDEX idx_fulltext_tickets_route (departure_city, arrival_city),
+ALTER TABLE travel_tickets ADD FULLTEXT INDEX idx_fulltext_tickets_class (class_type);
 ALTER TABLE travel_tickets ADD FULLTEXT INDEX idx_fulltext_departure_city (departure_city);
 CREATE INDEX idx_ticket_cancellations_reservation_id ON ticket_cancellations(reservation_id);
 CREATE INDEX idx_ticket_cancellations_canceled_by ON ticket_cancellations(canceled_by);
