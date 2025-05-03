@@ -109,7 +109,7 @@ CREATE TABLE travel_tickets (
     available_seats INT UNSIGNED NOT NULL CHECK (available_seats >= 0),
     total_seats INT UNSIGNED NOT NULL CHECK (total_seats > 0),
     transport_company_id BIGINT UNSIGNED NULL,
-    class_type ENUM('economy', 'business', 'VIP') NOT NULL,
+    class_type VARCHAR(100) NOT NULL,
     status ENUM('available', 'sold_out', 'canceled') DEFAULT 'available',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -372,6 +372,8 @@ CREATE TABLE ticket_cancellations (
     FOREIGN KEY (canceled_by) REFERENCES users(id) ON DELETE CASCADE
 );
 
+ALTER TABLE users ADD FULLTEXT INDEX idx_fulltext_user_details (first_name, last_name);
+ALTER TABLE travel_tickets ADD FULLTEXT INDEX idx_fulltext_travel_ticket_details (departure_city, arrival_city, class_type);
 ALTER TABLE users ADD FULLTEXT INDEX idx_fulltext_users_name (first_name, last_name);
 ALTER TABLE travel_tickets ADD FULLTEXT INDEX idx_fulltext_tickets_route (departure_city, arrival_city);
 ALTER TABLE travel_tickets ADD FULLTEXT INDEX idx_fulltext_departure_city (departure_city);

@@ -44,6 +44,19 @@ BEGIN
     WHERE tt.departure_city = city_name;
 END //
 
+-- Stored Procedure 4
+DELIMITER //
+
+CREATE PROCEDURE SearchTicketsByKeyword(IN keyword VARCHAR(100))
+BEGIN
+    SELECT t.*
+    FROM travel_tickets t
+    JOIN user_reservations ur ON ur.ticket_id = t.id
+    JOIN users u ON u.id = ur.user_id
+    WHERE MATCH(u.first_name, u.last_name) AGAINST (keyword IN NATURAL LANGUAGE MODE)
+       OR MATCH(t.departure_city, t.arrival_city, t.class_type) AGAINST (keyword IN NATURAL LANGUAGE MODE);
+END //
+
 -- Stored Procedure 8
 DELIMITER //
 
