@@ -13,6 +13,24 @@ BEGIN
     ORDER BY ur.reserved_at;
 END //
 
+-- Stored Procedure 2
+DELIMITER //
+
+CREATE PROCEDURE get_users_with_canceled_reservations_by_support(IN support_contact VARCHAR(100))
+BEGIN
+    SELECT DISTINCT
+        u.id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.phone
+    FROM users u
+    JOIN user_reservations ur ON u.id = ur.user_id
+    JOIN ticket_cancellations tc ON ur.id = tc.reservation_id
+    JOIN users support ON tc.canceled_by = support.id
+    WHERE support.email = support_contact OR support.phone = support_contact;
+END //
+
 -- Stored Procedure 3
 DELIMITER //
 
