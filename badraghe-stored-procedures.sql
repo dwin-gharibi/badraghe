@@ -25,7 +25,7 @@ BEGIN
         FROM cancellations c
         JOIN travel_tickets t ON c.ticket_id = t.id
         JOIN support_staff s ON s.id = c.support_id
-        WHERE t.user_id = u.id AND (s.email = identifier OR s.phone_number = identifier)
+        WHERE t.user_id = u.id AND (s.email = identifier OR s.phone = identifier)
     );
 END //
 
@@ -55,6 +55,17 @@ BEGIN
     JOIN users u ON u.id = ur.user_id
     WHERE MATCH(u.first_name, u.last_name) AGAINST (keyword IN NATURAL LANGUAGE MODE)
        OR MATCH(t.departure_city, t.arrival_city, t.class_type) AGAINST (keyword IN NATURAL LANGUAGE MODE);
+END //
+
+-- Stored Procedure 5
+DELIMITER //
+
+CREATE PROCEDURE GetOtherUsersFromSameCity(IN contactInfo VARCHAR(100))
+BEGIN
+    SELECT u.first_name, u.last_name, u.email, u.phone, u.city
+    FROM users u
+    WHERE u.city = (SELECT city FROM users WHERE email = contactInfo OR phone = contactInfo)
+    AND (u.email != contactInfo AND u.phone != contactInfo);
 END //
 
 -- Stored Procedure 8
