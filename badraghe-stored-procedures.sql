@@ -83,6 +83,19 @@ BEGIN
     LIMIT n;
 END //
 
+-- Stored Procedure 7
+DELIMITER //
+
+CREATE PROCEDURE GetCancelledTicketsByTransportType(IN transportType ENUM('plane', 'train', 'bus'))
+BEGIN
+    SELECT tt.id, tt.departure_city, tt.arrival_city, tt.departure_time, tt.arrival_time, tt.status, tc.canceled_at
+    FROM travel_tickets tt
+    JOIN ticket_cancellations tc ON tt.id = tc.reservation_id
+    WHERE tt.transport_type = transportType
+    AND tt.status = 'canceled'
+    ORDER BY tc.canceled_at;
+END //
+
 -- Stored Procedure 8
 DELIMITER //
 
