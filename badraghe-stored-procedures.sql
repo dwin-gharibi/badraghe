@@ -68,6 +68,21 @@ BEGIN
     AND (u.email != contactInfo AND u.phone != contactInfo);
 END //
 
+-- Stored Procedure 6
+DELIMITER //
+
+CREATE PROCEDURE GetTopNUsersWithMostTickets(IN startDate DATE, IN n INT)
+BEGIN
+    SELECT u.first_name, u.last_name, u.email, COUNT(pr.id) AS ticket_count
+    FROM users u
+    JOIN user_reservations ur ON ur.user_id = u.id
+    JOIN payments pr ON pr.reservation_id = ur.id
+    WHERE pr.payment_date >= startDate
+    GROUP BY u.id
+    ORDER BY ticket_count DESC
+    LIMIT n;
+END //
+
 -- Stored Procedure 8
 DELIMITER //
 
