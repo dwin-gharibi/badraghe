@@ -1,0 +1,18 @@
+stages:
+  - seed
+
+seed_database:
+  stage: seed
+  image: python:3.11
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - echo "Seeding database..."
+    - python main.py
+  only:
+    changes:
+      - main.py
+      - seeders/**
+      - fakers/**
+      - config/**
+      - .gitlab-ci.yml
