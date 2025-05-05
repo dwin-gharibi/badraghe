@@ -66,7 +66,7 @@ Monitor Badraghe's services with the **Updamus monitoring platform.**
 
 ---
 
-![Badraghe Logo](./assets/badraghe-logo.png)
+![Badraghe Logo](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/badraghe-logo.png)
 
 **Badraghe** is a comprehensive online booking platform that allows users to search, reserve, and manage tickets seamlessly. Inspired by industry giants like Alibaba, it offers a real-time, secure, and flexible reservation system that adapts to users' needs.
 
