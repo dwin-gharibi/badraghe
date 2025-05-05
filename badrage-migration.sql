@@ -161,7 +161,7 @@ ALTER TABLE user_reservations ADD COLUMN payment_id BIGINT UNSIGNED NULL;
 ALTER TABLE user_reservations ADD FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL;
 
 CREATE TABLE reports (
-    id BIGINT UNSIGNED PRIMARY KEY,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
     ticket_id BIGINT UNSIGNED,
     category VARCHAR(50) CHECK (category IN ('payment_issue', 'delay', 'cancellation', 'other')),
@@ -177,7 +177,7 @@ CREATE TABLE reports (
 );
 
 CREATE TABLE notifications (
-    id BIGINT UNSIGNED PRIMARY KEY,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
     message TEXT NOT NULL,
     status VARCHAR(20) CHECK (status IN ('sent', 'pending', 'failed')) DEFAULT 'pending',
@@ -190,7 +190,7 @@ CREATE TABLE notifications (
 );
 
 CREATE TABLE refund_requests (
-    id BIGINT UNSIGNED PRIMARY KEY,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
     payment_id BIGINT UNSIGNED NOT NULL,
     reason TEXT NOT NULL,
