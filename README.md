@@ -1,5 +1,6 @@
 # Badraghe (https://badraghe.dwin.codes/)
 
+
 # 🚀 New Features in Badraghe Platform
 
 I'm so excited to introduce several powerful new features that make development, monitoring, and deployment smoother than ever!
@@ -13,7 +14,7 @@ I'm so excited to introduce several powerful new features that make development,
 
 > A robust API backend powering Badraghe services.
 
-![API Endpoint](./assets/Badraghe_API.png)
+![API Endpoint](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Badraghe_API.png)
 
 ---
 
@@ -21,7 +22,7 @@ I'm so excited to introduce several powerful new features that make development,
 
 Seamlessly deploy, migrate, and seed project with integrated **GitLab CI/CD pipelines.**
 
-![GitLab CI/CD](./assets/Badraghe_CI_CD.png)
+![GitLab CI/CD](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Badraghe_CI_CD.png)
 
 ---
 
@@ -31,8 +32,8 @@ Seamlessly deploy, migrate, and seed project with integrated **GitLab CI/CD pipe
 🔗 [https://metabase.badraghe.dwin.codes/](https://metabase.badraghe.dwin.codes/)
 
 
-![Metabase](./assets/Badraghe-Metabase2.png)
-![Metabase](./assets/Badraghe-Metabase.png)
+![Metabase](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Badraghe-Metabase2.png)
+![Metabase](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Badraghe-Metabase.png)
 
 
 
@@ -43,7 +44,7 @@ Seamlessly deploy, migrate, and seed project with integrated **GitLab CI/CD pipe
 Handle database operations easily with Badraghe's PhpMyAdmin.
 🔗 [https://phpmyadmin.badraghe.dwin.codes/](https://phpmyadmin.badraghe.dwin.codes/)
 
-![PhpMyAdmin](./assets/Badraghe-Phpmyadmin.png)
+![PhpMyAdmin](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Badraghe-Phpmyadmin.png)
 
 ---
 
@@ -51,7 +52,7 @@ Handle database operations easily with Badraghe's PhpMyAdmin.
 
 Seed databases with realistic dummy data via the **Badraghe CLI tool.**
 
-![CLI Seeders](./assets/CLI_Seeders.png)
+![CLI Seeders](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/CLI_Seeders.png)
 
 ---
 
@@ -60,17 +61,13 @@ Seed databases with realistic dummy data via the **Badraghe CLI tool.**
 Monitor Badraghe's services with the **Updamus monitoring platform.**
 🔗 [https://my.updamus.com/symlink/37fc914f-f097-4925-8e2d-769fb4d6cecc](https://my.updamus.com/symlink/37fc914f-f097-4925-8e2d-769fb4d6cecc)
 
-![Updamus](./assets/Badraghe-Updamus.png)
+![Updamus](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Badraghe-Updamus.png)
 
 
 ---
 
-![Badraghe Logo](./assets/badraghe-logo.png)
 
-**Badraghe** is a comprehensive online booking platform that allows users to search, reserve, and manage tickets seamlessly. Inspired by industry giants like Alibaba, it offers a real-time, secure, and flexible reservation system that adapts to users' needs.
-
-
-![SystemDesign](./assets/Badraghe-systemdesign.jpg)
+![SystemDesign](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Badraghe-systemdesign.jpg)
 
 ## 🚀 Features
 
@@ -81,7 +78,7 @@ Monitor Badraghe's services with the **Updamus monitoring platform.**
 
 ## 📋 ER Diagram
 
-![ERDiagram](./assets/Badraghe-ERD.png)
+![ERDiagram](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Badraghe-ERD.png)
 
 ## 🪄 Usage and Tests
 
@@ -141,13 +138,13 @@ pip install -r requirements.txt
 python -m unittest test.py
 ```
 
-![ScreenShot7](./assets/Screenshot7.png)
+![ScreenShot7](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Screenshot7.png)
 
-![ScreenShot1](./assets/Screenshot1.png)
+![ScreenShot1](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Screenshot1.png)
 
-![ScreenShot2](./assets/Screenshot2.png)
+![ScreenShot2](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Screenshot2.png)
 
-![ScreenShot3](./assets/Screenshot3.png)
+![ScreenShot3](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Screenshot3.png)
 
 This will:
 
@@ -155,11 +152,11 @@ This will:
 - **Perform retrieval & validation checks**
 - **Ensure constraints (e.g., unique emails, valid foreign keys) are enforced**
 
-![ScreenShot4](./assets/Screenshot4.png)
+![ScreenShot4](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Screenshot4.png)
 
-![ScreenShot5](./assets/Screenshot5.png)
+![ScreenShot5](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Screenshot5.png)
 
-![ScreenShot6](./assets/Screenshot6.png)
+![ScreenShot6](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Screenshot6.png)
 
 **The test script** generates realistic but dummy data using the *Faker library.* It creates random user details, travel tickets, reservations, and payments, mimicking real-world data.
 
@@ -170,4 +167,4 @@ Examples of generated data:
 
 This ensures the database is tested with realistic scenarios while avoiding duplicate or invalid data.
 
-![ScreenShot8](./assets/Screenshot8.png)
+![ScreenShot8](https://cloud-data.s3.ir-thr-at1.arvanstorage.ir/Screenshot8.png)
