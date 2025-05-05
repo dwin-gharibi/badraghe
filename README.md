@@ -1,5 +1,70 @@
 # Badraghe (https://badraghe.dwin.codes/)
 
+# 🚀 New Features in Badraghe Platform
+
+I'm so excited to introduce several powerful new features that make development, monitoring, and deployment smoother than ever!
+
+---
+
+### 📡 API Endpoint
+
+**Base URL:**
+🔗 [https://api.badraghe.dwin.codes/](https://api.badraghe.dwin.codes/)
+
+> A robust API backend powering Badraghe services.
+
+![API Endpoint](./assets/Badraghe_API.png)
+
+---
+
+### 🔁 GitLab CI/CD Integration
+
+Seamlessly deploy, migrate, and seed project with integrated **GitLab CI/CD pipelines.**
+
+![GitLab CI/CD](./assets/Badraghe_CI_CD.png)
+
+---
+
+### 📊 Badraghe Metabase
+
+**Explore metrics** and **monitor** everything in one dashboard.
+🔗 [https://metabase.badraghe.dwin.codes/](https://metabase.badraghe.dwin.codes/)
+
+
+![Metabase](./assets/Badraghe-Metabase2.png)
+![Metabase](./assets/Badraghe-Metabase.png)
+
+
+
+---
+
+### 🛠️ PhpMyAdmin Access
+
+Handle database operations easily with Badraghe's PhpMyAdmin.
+🔗 [https://phpmyadmin.badraghe.dwin.codes/](https://phpmyadmin.badraghe.dwin.codes/)
+
+![PhpMyAdmin](./assets/Badraghe-Phpmyadmin.png)
+
+---
+
+### 📦 Badraghe CLI Seeders
+
+Seed databases with realistic dummy data via the **Badraghe CLI tool.**
+
+![CLI Seeders](./assets/CLI_Seeders.png)
+
+---
+
+### 🧩 Badraghe Updamus
+
+Monitor Badraghe's services with the **Updamus monitoring platform.**
+🔗 [https://my.updamus.com/symlink/37fc914f-f097-4925-8e2d-769fb4d6cecc](https://my.updamus.com/symlink/37fc914f-f097-4925-8e2d-769fb4d6cecc)
+
+![Updamus](./assets/Badraghe-Updamus.png)
+
+
+---
+
 ![Badraghe Logo](./assets/badraghe-logo.png)
 
 **Badraghe** is a comprehensive online booking platform that allows users to search, reserve, and manage tickets seamlessly. Inspired by industry giants like Alibaba, it offers a real-time, secure, and flexible reservation system that adapts to users' needs.
