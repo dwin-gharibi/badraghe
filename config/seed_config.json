@@ -1,0 +1,23 @@
+{
+    "default_counts": {
+      "users": 50,
+      "roles": 10,
+      "permissions": 20,
+      "features": 15,
+      "role_permissions": 50,
+      "user_role": 100,
+      "service_providers": 20,
+      "travel_tickets": 200,
+      "payment_methods": 5,
+      "user_reservations": 300,
+      "payments": 250,
+      "reports": 30,
+      "notifications": 100,
+      "refund_requests": 20,
+      "reviews": 150,
+      "discounts": 10,
+      "user_loyalty": 50,
+      "support_categories": 5,
+      "support_tickets": 20
+    }
+  }
