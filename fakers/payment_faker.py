@@ -1,10 +1,10 @@
 from faker import Faker
 import random
 import uuid
+from decorators.registry import get_faker, register_faker
 
+@register_faker('payments')
 def fake_payment(fake=None, user_ids=None, reservation_ids=None, method_ids=None):
-    if not fake:
-        fake = Faker()
     
     statuses = ['successful', 'failed', 'pending']
     

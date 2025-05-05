@@ -1,9 +1,9 @@
 from faker import Faker
 import random
+from decorators.registry import get_faker, register_faker
 
+@register_faker('bus_details')
 def fake_bus_detail(fake=None, ticket_ids=None):
-    if not fake:
-        fake = Faker()
     
     bus_types = ['VIP', 'standard', 'sleeper']
     seat_configs = ['1+2', '2+2']

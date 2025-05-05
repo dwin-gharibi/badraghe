@@ -1,9 +1,9 @@
 from faker import Faker
 import random
+from decorators.registry import get_faker, register_faker
 
+@register_faker('payment_methods')
 def fake_payment_method(fake=None):
-    if not fake:
-        fake = Faker('en_US')
     
     methods = ['CreditCard', 'ZarinPal', 'BankTransfer', 'IDPay', 'DigiPay', 'Cryptocurrency']
     

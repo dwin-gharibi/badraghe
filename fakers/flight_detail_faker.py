@@ -1,9 +1,9 @@
 from faker import Faker
 import random
+from decorators.registry import get_faker, register_faker
 
+@register_faker('flight_details')
 def fake_flight_detail(fake=None, ticket_ids=None):
-    if not fake:
-        fake = Faker()
     
     iranian_airlines = ["IranAir", "MahanAir", "QeshmAir", "CaspianAirlines", "ATAAirlines"]
     flight_classes = ['economy', 'business', 'first_class']

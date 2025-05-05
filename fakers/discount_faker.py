@@ -1,10 +1,10 @@
 from faker import Faker
 import random
 from datetime import datetime, timedelta
+from decorators.registry import get_faker, register_faker
 
+@register_faker('discounts')
 def fake_discount(fake=None):
-    if not fake:
-        fake = Faker()
     
     discount_types = ['percentage', 'fixed']
     

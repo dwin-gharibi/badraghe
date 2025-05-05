@@ -1,11 +1,11 @@
 from faker import Faker
 import random
 from datetime import datetime, timedelta
+from decorators.registry import get_faker, register_faker
 
+@register_faker('notifications')
 def fake_notification(fake=None, user_ids=None):
-    if not fake:
-        fake = Faker()
-    
+
     types = ['system', 'user', 'transaction', 'other']
     statuses = ['sent', 'pending', 'failed']
     

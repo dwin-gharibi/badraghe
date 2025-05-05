@@ -1,10 +1,10 @@
 from faker import Faker
 import random
 from datetime import datetime, timedelta
+from decorators.registry import get_faker, register_faker
 
+@register_faker('travel_tickets')
 def fake_travel_ticket(fake=None, provider_ids=None):
-    if not fake:
-        fake = Faker()
     
     transport_types = ['plane', 'train', 'bus']
     class_types = ['economy', 'business', 'first']
@@ -19,7 +19,7 @@ def fake_travel_ticket(fake=None, provider_ids=None):
         "arrival_city": fake.city(),
         "departure_time": departure_time.isoformat(),
         "arrival_time": arrival_time.isoformat(),
-        "price": round(random.uniform(50, 1000), 2),
+        "price": round(random.uniform(50, 1000), 2) * 100000,
         "currency": "IRR",
         "available_seats": random.randint(0, 100),
         "total_seats": random.randint(50, 100),

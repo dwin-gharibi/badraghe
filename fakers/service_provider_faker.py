@@ -1,8 +1,8 @@
 from faker import Faker
+from decorators.registry import get_faker, register_faker
 
+@register_faker('service_providers')
 def fake_service_provider(fake=None):
-    if not fake:
-        fake = Faker()
     
     return {
         "name": fake.unique.company(),

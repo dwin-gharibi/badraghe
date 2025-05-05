@@ -1,9 +1,9 @@
 from faker import Faker
 import random
+from decorators.registry import get_faker, register_faker
 
+@register_faker('train_details')
 def fake_train_detail(fake=None, ticket_ids=None):
-    if not fake:
-        fake = Faker()
     
     return {
         "ticket_id": random.choice(ticket_ids),

@@ -1,10 +1,10 @@
 from faker import Faker
 import random
 from datetime import datetime, timedelta
+from decorators.registry import get_faker, register_faker
 
+@register_faker('refund_requests')
 def fake_refund_request(fake=None, user_ids=None, payment_ids=None):
-    if not fake:
-        fake = Faker()
     
     statuses = ['pending', 'approved', 'rejected']
     reasons = [

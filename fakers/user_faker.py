@@ -2,10 +2,10 @@ from faker import Faker
 import random
 import json
 from datetime import datetime, timedelta
+from decorators.registry import get_faker, register_faker
 
+@register_faker('users')
 def fake_user(fake=None):
-    if not fake:
-        fake = Faker()
     
     return {
         "first_name": fake.first_name(),
