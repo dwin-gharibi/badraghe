@@ -97,11 +97,17 @@ LIMIT 3;
 SELECT 
     tt.departure_city,
     COUNT(*) AS tickets_sold
-FROM travel_tickets tt USE INDEX (idx_fulltext_departure_city)
+FROM travel_tickets tt
 JOIN user_reservations ur ON tt.id = ur.ticket_id
-WHERE MATCH(tt.departure_city) AGAINST('Tehran' IN BOOLEAN MODE)
-AND ur.status != 'canceled'
-GROUP BY tt.departure_city;
+WHERE 
+    tt.departure_city IN (
+        'Tehran', 'Eslamshahr', 'Shahriar', 'Varamin', 'Qarchak',
+        'Pishva', 'Pakdasht', 'Damavand', 'Roudehen', 'Bumehen',
+        'Malard', 'Robat Karim', 'Baharestan', 'Andisheh', 'Ray', 'Pardis'
+    )
+    AND ur.status != 'canceled'
+GROUP BY tt.departure_city
+ORDER BY tickets_sold DESC;
 
 -- Query 10
 SELECT DISTINCT tt.departure_city
