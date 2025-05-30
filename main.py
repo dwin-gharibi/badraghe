@@ -154,6 +154,24 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def favicon():
     return FileResponse("static/favicon.ico")
 
+app.include_router(auth.router, tags=["Auth"])
+app.include_router(users.router, tags=["Users"])
+app.include_router(city.router, tags=["Cities"])
+app.include_router(tickets.router, tags=["Tickets"])
+app.include_router(reservations.router, tags=["Reservations"])
+
+app.include_router(discounts.router, tags=["Discounts"])
+app.include_router(features.router, tags=["Features"])
+app.include_router(notifications.router, tags=["Notifications"])
+app.include_router(payments.router, tags=["Payments"])
+
+app.include_router(support.router, tags=["Support Tickets"])
+app.include_router(vehichles.router, tags=["Vehichles"])
+
+app.include_router(reports.router, tags=["Reports"])
+app.include_router(roles.router, tags=["Roles"])
+app.include_router(service_providers.router, tags=["Service Providers"])
+
 @app.get("/", tags=["System"], summary="Health check and welcome message")
 async def root():
     return {"message": "Welcome to Badraghe"}
