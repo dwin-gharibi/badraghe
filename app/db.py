@@ -20,16 +20,32 @@ async def close_db():
         pool.close()
         await pool.wait_closed()
 
-async def execute_query(query: str, params: tuple = (), fetch_one=False, fetch_all=False, return_lastrowid=False):
+async def execute_query(
+    query: str,
+    params: tuple = (),
+    fetch_one: bool = False,
+    fetch_all: bool = False,
+    return_lastrowid: bool = False,
+    commit: bool = False
+):
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(query, params)
+
             if return_lastrowid:
                 await conn.commit()
                 return cur.lastrowid
+
             if fetch_one:
-                return await cur.fetchone()
-            if fetch_all:
-                return await cur.fetchall()
-            await conn.commit()
+                result = await cur.fetchone()
+            elif fetch_all:
+                result = await cur.fetchall()
+            else:
+                result = None
+
+            if commit:
+                await conn.commit()
+
+            return result
+
 

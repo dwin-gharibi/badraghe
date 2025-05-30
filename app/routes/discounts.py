@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel
 from app.db import execute_query, connect_db
 from app.utils.auth_util import get_current_user, require_roles
+from app.utils.rbac_util import has_permission
 
 router = APIRouter(prefix="/discounts")
 

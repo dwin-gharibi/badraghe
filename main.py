@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from app.db import connect_db, close_db, execute_query
 from app.config import settings
-from app.routes import auth, users, city, tickets, reservations, discounts, features, notifications, payments, reports, roles, service_providers, support, vehichles
+from app.routes import auth, users, city, tickets, reservations, discounts, features, notifications, payments, reports, roles, service_providers, support, vehicles
 from app.utils.security_util import verify_password, hash_password
 from app.utils.jwt_util import create_access_token
 from fastapi import APIRouter, Request, HTTPException, status, Depends
@@ -115,11 +115,11 @@ tags_metadata = [
         }
     },
     {
-        "name": "Vehichles",
+        "name": "Vehicles",
         "description": "Management of vehicle data related to transport and travel bookings.",
         "externalDocs": {
-            "description": "Complete Vehichles API documentation",
-            "url": "https://hamgit.ir/dngi2005/badraghe/vehichles-docs"
+            "description": "Complete Vehicles API documentation",
+            "url": "https://hamgit.ir/dngi2005/badraghe/vehicles-docs"
         }
     },
     {
@@ -166,7 +166,7 @@ app.include_router(notifications.router, tags=["Notifications"])
 app.include_router(payments.router, tags=["Payments"])
 
 app.include_router(support.router, tags=["Support Tickets"])
-app.include_router(vehichles.router, tags=["Vehichles"])
+app.include_router(vehicles.router, tags=["Vehicles"])
 
 app.include_router(reports.router, tags=["Reports"])
 app.include_router(roles.router, tags=["Roles"])
