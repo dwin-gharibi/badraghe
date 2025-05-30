@@ -154,3 +154,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def favicon():
     return FileResponse("static/favicon.ico")
 
+@app.get("/", tags=["System"], summary="Health check and welcome message")
+async def root():
+    return {"message": "Welcome to Badraghe"}
