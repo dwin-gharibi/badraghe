@@ -542,3 +542,354 @@ async def search_tickets(
 
     return detailed_tickets
 
+@router.post("/{ticket_id}/flight-details", status_code=status.HTTP_201_CREATED)
+async def add_flight_details(
+    ticket_id: int,
+    details: FlightDetailsCreate,
+    current_user: dict = Depends(require_roles("admin", "ticket_manager"))
+):
+    await connect_db()
+    ticket = await execute_query(
+        "SELECT transport_type FROM travel_tickets WHERE id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found"
+        )
+    if ticket["transport_type"] != "plane":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticket is not a flight"
+        )
+    
+    existing = await execute_query(
+        "SELECT 1 FROM flight_details WHERE ticket_id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Flight details already exist for this ticket"
+        )
+    
+    try:
+        await execute_query(
+            """
+            INSERT INTO flight_details (
+                ticket_id, airline_name, flight_class,
+                stops, flight_number, departure_airport,
+                arrival_airport
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                ticket_id,
+                details.airline_name,
+                details.flight_class.value,
+                details.stops,
+                details.flight_number,
+                details.departure_airport,
+                details.arrival_airport
+            ),
+            commit=True
+        )
+        
+        redis = await get_redis()
+        await redis.delete(f"ticket:{ticket_id}")
+        await close_db()
+
+        return {"message": "Flight details added successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.post("/{ticket_id}/train-details", status_code=status.HTTP_201_CREATED)
+async def add_train_details(
+    ticket_id: int,
+    details: TrainDetailsCreate,
+    current_user: dict = Depends(require_roles("admin", "ticket_manager"))
+):
+    await connect_db()
+    ticket = await execute_query(
+        "SELECT transport_type FROM travel_tickets WHERE id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found"
+        )
+    if ticket["transport_type"] != "train":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticket is not a train"
+        )
+    
+    existing = await execute_query(
+        "SELECT 1 FROM train_details WHERE ticket_id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Train details already exist for this ticket"
+        )
+    
+    try:
+        await execute_query(
+            """
+            INSERT INTO train_details (
+                ticket_id, train_star_rating, private_cabin
+            ) VALUES (%s, %s, %s)
+            """,
+            (
+                ticket_id,
+                details.train_star_rating,
+                details.private_cabin
+            ),
+            commit=True
+        )
+        
+        redis = await get_redis()
+        await redis.delete(f"ticket:{ticket_id}")
+        await close_db()
+
+        return {"message": "Train details added successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.post("/{ticket_id}/bus-details", status_code=status.HTTP_201_CREATED)
+async def add_bus_details(
+    ticket_id: int,
+    details: BusDetailsCreate,
+    current_user: dict = Depends(require_roles("admin", "ticket_manager"))
+):
+    await connect_db()
+    ticket = await execute_query(
+        "SELECT transport_type FROM travel_tickets WHERE id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found"
+        )
+    if ticket["transport_type"] != "bus":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticket is not a bus"
+        )
+    
+    existing = await execute_query(
+        "SELECT 1 FROM bus_details WHERE ticket_id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bus details already exist for this ticket"
+        )
+    
+    try:
+        await execute_query(
+            """
+            INSERT INTO bus_details (
+                ticket_id, bus_company, bus_type, seats_per_row
+            ) VALUES (%s, %s, %s, %s)
+            """,
+            (
+                ticket_id,
+                details.bus_company,
+                details.bus_type.value,
+                details.seats_per_row
+            ),
+            commit=True
+        )
+        
+        redis = await get_redis()
+        await redis.delete(f"ticket:{ticket_id}")
+        await close_db()
+        
+        return {"message": "Bus details added successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.post("/{ticket_id}/features", status_code=status.HTTP_201_CREATED)
+async def add_feature_to_ticket(
+    ticket_id: int,
+    feature_name: str,
+    current_user: dict = Depends(require_roles("admin", "ticket_manager"))
+):
+    await connect_db()
+    ticket = await execute_query(
+        "SELECT transport_type FROM travel_tickets WHERE id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found"
+        )
+    
+    feature = await execute_query(
+        "SELECT id FROM features WHERE name = %s",
+        (feature_name,),
+        fetch_one=True
+    )
+    if not feature:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feature not found"
+        )
+    
+    details_id = None
+    if ticket["transport_type"] == "plane":
+        details = await execute_query(
+            "SELECT id FROM flight_details WHERE ticket_id = %s",
+            (ticket_id,),
+            fetch_one=True
+        )
+        if details:
+            details_id = details["id"]
+            table = "flight_features"
+    elif ticket["transport_type"] == "train":
+        details = await execute_query(
+            "SELECT id FROM train_details WHERE ticket_id = %s",
+            (ticket_id,),
+            fetch_one=True
+        )
+        if details:
+            details_id = details["id"]
+            table = "train_features"
+    elif ticket["transport_type"] == "bus":
+        details = await execute_query(
+            "SELECT id FROM bus_details WHERE ticket_id = %s",
+            (ticket_id,),
+            fetch_one=True
+        )
+        if details:
+            details_id = details["id"]
+            table = "bus_features"
+    
+    if not details_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticket details not found"
+        )
+    
+    existing = await execute_query(
+        f"SELECT 1 FROM {table} WHERE {table.split('_')[0]}_id = %s AND feature_id = %s",
+        (details_id, feature["id"]),
+        fetch_one=True
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Feature already added to this ticket"
+        )
+    
+    try:
+        await execute_query(
+            f"INSERT INTO {table} ({table.split('_')[0]}_id, feature_id) VALUES (%s, %s)",
+            (details_id, feature["id"]),
+            commit=True
+        )
+        
+        redis = await get_redis()
+        await redis.delete(f"ticket:{ticket_id}")
+        await connect_db()
+
+        return {"message": "Feature added successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.get("/stats", response_model=TicketStatsResponse)
+async def get_ticket_stats(
+    transport_type: Optional[TransportType] = None,
+    class_type: Optional[TicketClass] = None,
+    current_user: dict = Depends(require_roles("admin", "ticket_manager"))
+):
+    await connect_db()
+    where_clause = "WHERE 1=1"
+    params = []
+    
+    if transport_type:
+        where_clause += " AND transport_type = %s"
+        params.append(transport_type.value)
+    
+    if class_type:
+        where_clause += " AND class_type = %s"
+        params.append(class_type.value)
+    
+    status_counts = await execute_query(
+        f"""
+        SELECT status, COUNT(*) as count
+        FROM travel_tickets
+        {where_clause}
+        GROUP BY status
+        """,
+        params,
+        fetch_all=True
+    )
+    
+    transport_counts = await execute_query(
+        f"""
+        SELECT transport_type, COUNT(*) as count
+        FROM travel_tickets
+        WHERE status = 'available'
+        GROUP BY transport_type
+        """,
+        fetch_all=True
+    )
+    
+    class_counts = await execute_query(
+        f"""
+        SELECT class_type, COUNT(*) as count
+        FROM travel_tickets
+        WHERE status = 'available'
+        GROUP BY class_type
+        """,
+        fetch_all=True
+    )
+    
+    stats = {
+        "total_tickets": 0,
+        "available": 0,
+        "sold_out": 0,
+        "canceled": 0,
+        "by_transport_type": {},
+        "by_class": {}
+    }
+    
+    for row in status_counts:
+        stats["total_tickets"] += row["count"]
+        stats[row["status"]] = row["count"]
+    
+    for row in transport_counts:
+        stats["by_transport_type"][row["transport_type"]] = row["count"]
+    
+    for row in class_counts:
+        stats["by_class"][row["class_type"]] = row["count"]
+    
+    await close_db()
+    
+    return stats
