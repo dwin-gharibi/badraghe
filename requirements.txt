@@ -4,3 +4,5 @@ aiomysql
 aioredis
 pydantic
 pydantic-settings
+pytest
+httpx
