@@ -666,3 +666,154 @@ async def get_user_reservation_history(
     
     return formatted_reservations
 
+@router.get("/stats", response_model=ReservationStatsResponse)
+async def get_reservation_stats(
+    transport_type: Optional[TransportType] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    current_user: dict = Depends(require_roles("admin"))
+):
+    where_clause = "WHERE 1=1"
+    params = []
+    
+    if transport_type:
+        where_clause += " AND t.transport_type = %s"
+        params.append(transport_type.value)
+    
+    if start_date:
+        where_clause += " AND r.reserved_at >= %s"
+        params.append(start_date)
+    
+    if end_date:
+        where_clause += " AND r.reserved_at <= %s"
+        params.append(end_date)
+    
+    status_counts = await execute_query(
+        f"""
+        SELECT r.status, COUNT(*) as count
+        FROM user_reservations r
+        JOIN travel_tickets t ON r.ticket_id = t.id
+        {where_clause}
+        GROUP BY r.status
+        """,
+        params,
+        fetch_all=True
+    )
+    
+    transport_counts = await execute_query(
+        f"""
+        SELECT t.transport_type, COUNT(*) as count
+        FROM user_reservations r
+        JOIN travel_tickets t ON r.ticket_id = t.id
+        {where_clause}
+        GROUP BY t.transport_type
+        """,
+        params,
+        fetch_all=True
+    )
+    
+    stats = {
+        "total_reservations": 0,
+        "temporary": 0,
+        "reserved": 0,
+        "paid": 0,
+        "canceled": 0,
+        "by_transport_type": {}
+    }
+    
+    for row in status_counts:
+        stats["total_reservations"] += row["count"]
+        stats[row["status"]] = row["count"]
+    
+    for row in transport_counts:
+        stats["by_transport_type"][row["transport_type"]] = row["count"]
+    
+    return stats
+
+async def has_permission(user_id: int, permission: str) -> bool:
+    return await execute_query(
+        """
+        SELECT 1 FROM user_role ur
+        JOIN role_permissions rp ON ur.role_id = rp.role_id
+        JOIN permissions p ON rp.permission_id = p.id
+        WHERE ur.user_id = %s AND p.name = %s
+        """,
+        (user_id, permission),
+        fetch_one=True
+    ) is not None
+
+
+async def check_cancellation_penalty(reservation_id: int) -> dict:
+    return {"penalty_percent": 10}
+
+@router.post("/cancel/{reservation_id}/")
+async def user_cancel_reservation(
+    user_id: int,
+    reservation_id: int,
+    cancellation_reason: str,
+    current_user=Depends(get_current_user),
+):
+    if current_user["user_id"] != user_id:
+        roles = await execute_query(
+            """
+            SELECT r.name 
+            FROM user_role ur 
+            JOIN roles r ON ur.role_id = r.id 
+            WHERE ur.user_id = %s
+            """,
+            (current_user["user_id"],),
+            fetch_all=True,
+        )
+        user_roles = [r["name"] if isinstance(r, dict) else r[0] for r in roles] if roles else []
+        if "admin" not in user_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to cancel other users' reservations",
+            )
+
+    await connect_db()
+
+    reservation = await execute_query(
+        "SELECT * FROM user_reservations WHERE id = %s AND user_id = %s AND status = 'paid'",
+        (reservation_id, user_id),
+        fetch_one=True,
+    )
+    if not reservation:
+        await close_db()
+        raise HTTPException(status_code=404, detail="Paid reservation not found or does not belong to user")
+
+    penalty_info = await check_cancellation_penalty(reservation_id)
+
+    await execute_query(
+        """
+        INSERT INTO ticket_cancellations 
+            (reservation_id, canceled_by, cancellation_reason, canceled_at, created_at, updated_at)
+        VALUES (%s, %s, %s, NOW(), NOW(), NOW())
+        """,
+        (reservation_id, user_id, cancellation_reason),
+    )
+
+    await execute_query(
+        "UPDATE user_reservations SET status = 'canceled', refund_status = 'pending', updated_at = NOW() WHERE id = %s",
+        (reservation_id,),
+    )
+
+    price_paid = float(reservation.get("price_paid") or 0)
+    penalty_percent = penalty_info.get("penalty_percent", 0)
+    refund_amount = price_paid * (100 - penalty_percent) / 100
+
+    await execute_query(
+        """
+        INSERT INTO refund_requests (user_id, payment_id, reason, status, refund_amount, request_date, created_at, updated_at)
+        VALUES (%s, %s, %s, 'pending', %s, NOW(), NOW(), NOW())
+        """,
+        (user_id, reservation["payment_id"], cancellation_reason, refund_amount),
+    )
+
+    await close_db()
+
+    return {
+        "message": "Ticket canceled successfully and refund request submitted",
+        "refund_amount": refund_amount,
+        "penalty_percent": penalty_percent,
+    }
