@@ -423,3 +423,276 @@ async def update_bus_details(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+@router.post("/features", status_code=status.HTTP_201_CREATED)
+async def create_feature(
+    feature: FeatureCreate,
+    current_user: dict = Depends(require_roles("admin", "provider"))
+):
+    try:
+        await connect_db()
+        feature_id = await execute_query(
+            """
+            INSERT INTO features (name, description)
+            VALUES (%s, %s)
+            RETURNING id
+            """,
+            (feature.name, feature.description),
+            fetch_one=True
+        )
+        await close_db()
+        return {"feature_id": feature_id["id"]}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.get("/features", response_model=List[Dict[str, Any]])
+async def get_all_features(
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
+    await connect_db()
+    query = "SELECT id, name, description FROM features"
+    params = []
+    
+    if search:
+        query += " WHERE name LIKE %s OR description LIKE %s"
+        params.extend([f"%{search}%", f"%{search}%"])
+    
+    query += " LIMIT %s OFFSET %s"
+    params.extend([limit, skip])
+    
+    features = await execute_query(query, params, fetch_all=True)
+    await close_db()
+    return features
+
+@router.post("/features/assign", status_code=status.HTTP_200_OK)
+async def assign_feature_to_vehicle(
+    assignment: FeatureAssignment,
+    current_user: dict = Depends(require_roles("admin", "provider"))
+):
+    await connect_db()
+    feature = await execute_query(
+        "SELECT 1 FROM features WHERE id = %s",
+        (assignment.feature_id,),
+        fetch_one=True
+    )
+    if not feature:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feature not found"
+        )
+    
+    table_map = {
+        "flight": ("flight_details", "flight_features", "flight_id"),
+        "train": ("train_details", "train_features", "train_id"),
+        "bus": ("bus_details", "bus_features", "bus_id")
+    }
+    
+    if assignment.vehicle_type not in table_map:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid vehicle type. Must be 'flight', 'train', or 'bus'"
+        )
+    
+    table_name, feature_table, fk_name = table_map[assignment.vehicle_type]
+    
+    vehicle = await execute_query(
+        f"SELECT 1 FROM {table_name} WHERE id = %s",
+        (assignment.vehicle_id,),
+        fetch_one=True
+    )
+    if not vehicle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{assignment.vehicle_type.capitalize()} not found"
+        )
+    
+    try:
+        await execute_query(
+            f"""
+            INSERT IGNORE INTO {feature_table} ({fk_name}, feature_id)
+            VALUES (%s, %s)
+            """,
+            (assignment.vehicle_id, assignment.feature_id),
+            commit=True
+        )
+        await close_db()
+        return {"message": f"Feature assigned to {assignment.vehicle_type} successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.delete("/features/unassign", status_code=status.HTTP_200_OK)
+async def unassign_feature_from_vehicle(
+    vehicle_type: str,
+    vehicle_id: int,
+    feature_id: int,
+    current_user: dict = Depends(require_roles("admin", "provider"))
+):
+    await connect_db()
+    table_map = {
+        "flight": "flight_features",
+        "train": "train_features",
+        "bus": "bus_features"
+    }
+    
+    if vehicle_type not in table_map:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid vehicle type. Must be 'flight', 'train', or 'bus'"
+        )
+    
+    affected = await execute_query(
+        f"""
+        DELETE FROM {table_map[vehicle_type]} 
+        WHERE feature_id = %s AND {table_map[vehicle_type][:5]}_id = %s
+        """,
+        (feature_id, vehicle_id),
+        commit=True
+    )
+    if not affected:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feature assignment not found"
+        )
+    await close_db()
+    return {"message": "Feature unassigned successfully"}
+
+@router.get("/features/assigned", response_model=List[Dict[str, Any]])
+async def get_assigned_features(
+    vehicle_type: str,
+    vehicle_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    table_map = {
+        "flight": ("flight_features", "flight_id"),
+        "train": ("train_features", "train_id"),
+        "bus": ("bus_features", "bus_id")
+    }
+    await connect_db()
+
+    if vehicle_type not in table_map:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid vehicle type. Must be 'flight', 'train', or 'bus'"
+        )
+    
+    features = await execute_query(
+        f"""
+        SELECT f.id, f.name, f.description
+        FROM {table_map[vehicle_type][0]} ff
+        JOIN features f ON ff.feature_id = f.id
+        WHERE ff.{table_map[vehicle_type][1]} = %s
+        """,
+        (vehicle_id,),
+        fetch_all=True
+    )
+    await connect_db()
+    return features
+
+@router.get("/statistics/flights", response_model=Dict[str, Any])
+async def get_flight_statistics(
+    airline: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    current_user: dict = Depends(require_roles("admin", "analyst"))
+):
+    await connect_db()
+    query = """
+    SELECT 
+        COUNT(*) as total_flights,
+        AVG(t.price) as avg_price,
+        MIN(t.price) as min_price,
+        MAX(t.price) as max_price,
+        SUM(CASE WHEN t.status = 'available' THEN 1 ELSE 0 END) as available_flights,
+        SUM(CASE WHEN t.status = 'sold_out' THEN 1 ELSE 0 END) as sold_out_flights
+    FROM flight_details fd
+    JOIN travel_tickets t ON fd.ticket_id = t.id
+    WHERE 1=1
+    """
+    params = []
+    
+    if airline:
+        query += " AND fd.airline_name LIKE %s"
+        params.append(f"%{airline}%")
+    
+    if from_date:
+        query += " AND t.departure_time >= %s"
+        params.append(from_date)
+    
+    if to_date:
+        query += " AND t.departure_time <= %s"
+        params.append(to_date)
+    
+    stats = await execute_query(query, params, fetch_one=True)
+    await close_db()
+    return stats
+
+@router.get("/statistics/trains", response_model=Dict[str, Any])
+async def get_train_statistics(
+    min_rating: Optional[int] = None,
+    max_rating: Optional[int] = None,
+    current_user: dict = Depends(require_roles("admin", "analyst"))
+):
+    await connect_db()
+    query = """
+    SELECT 
+        COUNT(*) as total_trains,
+        AVG(td.train_star_rating) as avg_rating,
+        SUM(CASE WHEN td.private_cabin = TRUE THEN 1 ELSE 0 END) as with_private_cabins,
+        AVG(t.price) as avg_price,
+        MIN(t.price) as min_price,
+        MAX(t.price) as max_price
+    FROM train_details td
+    JOIN travel_tickets t ON td.ticket_id = t.id
+    WHERE 1=1
+    """
+    params = []
+    
+    if min_rating is not None:
+        query += " AND td.train_star_rating >= %s"
+        params.append(min_rating)
+    
+    if max_rating is not None:
+        query += " AND td.train_star_rating <= %s"
+        params.append(max_rating)
+    
+    stats = await execute_query(query, params, fetch_one=True)
+    await close_db()
+    return stats
+
+@router.get("/statistics/buses", response_model=Dict[str, Any])
+async def get_bus_statistics(
+    bus_type: Optional[str] = None,
+    current_user: dict = Depends(require_roles("admin", "analyst"))
+):
+    await connect_db()
+    query = """
+    SELECT 
+        COUNT(*) as total_buses,
+        AVG(t.price) as avg_price,
+        MIN(t.price) as min_price,
+        MAX(t.price) as max_price,
+        SUM(CASE WHEN bd.bus_type = 'VIP' THEN 1 ELSE 0 END) as vip_buses,
+        SUM(CASE WHEN bd.bus_type = 'standard' THEN 1 ELSE 0 END) as standard_buses,
+        SUM(CASE WHEN bd.bus_type = 'sleeper' THEN 1 ELSE 0 END) as sleeper_buses
+    FROM bus_details bd
+    JOIN travel_tickets t ON bd.ticket_id = t.id
+    WHERE 1=1
+    """
+    params = []
+    
+    if bus_type:
+        query += " AND bd.bus_type = %s"
+        params.append(bus_type)
+    
+    stats = await execute_query(query, params, fetch_one=True)
+    await close_db()
+    return stats
