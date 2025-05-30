@@ -303,3 +303,366 @@ async def update_reservation(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+@router.delete("/{reservation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_reservation(
+    reservation_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    reservation = await execute_query(
+        "SELECT * FROM user_reservations WHERE id = %s",
+        (reservation_id,),
+        fetch_one=True
+    )
+    if not reservation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reservation not found"
+        )
+    
+    if (reservation["user_id"] != current_user["user_id"] and 
+        not await has_permission(current_user["user_id"], "delete_all:reservations")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete this reservation"
+        )
+    
+    if reservation["status"] in ["temporary", "reserved"]:
+        await execute_query(
+            "UPDATE travel_tickets SET available_seats = available_seats + 1 WHERE id = %s",
+            (reservation["ticket_id"],),
+            commit=True
+        )
+    
+    await execute_query(
+        "DELETE FROM user_reservations WHERE id = %s",
+        (reservation_id,),
+        commit=True
+    )
+
+@router.post("/{reservation_id}/pay", status_code=status.HTTP_200_OK)
+async def pay_for_reservation(
+    reservation_id: int,
+    payment: PaymentRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    await connect_db()
+
+    reservation = await execute_query(
+        """
+        SELECT r.*, t.price, t.currency
+        FROM user_reservations r
+        JOIN travel_tickets t ON r.ticket_id = t.id
+        WHERE r.id = %s AND r.user_id = %s AND r.status IN ('temporary', 'reserved')
+        """,
+        (reservation_id, current_user["user_id"]),
+        fetch_one=True
+    )
+    if not reservation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reservation not found or not payable"
+        )
+    
+    if abs(float(reservation["price"]) - payment.amount) > 0.01:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment amount must be {reservation['price']} {reservation['currency']}"
+        )
+    
+    payment_method = await execute_query(
+        "SELECT 1 FROM payment_methods WHERE id = %s AND is_active = TRUE",
+        (payment.payment_method_id,),
+        fetch_one=True
+    )
+    if not payment_method:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid payment method"
+        )
+    
+    transaction_id = f"txn_{uuid.uuid4().hex[:16]}"
+    description = f"Payment for reservation {reservation_id}"
+    
+    if payment.currency == "IRR":
+        payload = {
+            "merchant_id": ZARINPAL_MERCHANT_ID,
+            "amount": int(payment.amount),
+            "callback_url": f"{CALLBACK_URL}?reservation_id={reservation_id}&user_id={current_user['user_id']}",
+            "description": description,
+            "metadata": {
+                "reservation_id": reservation_id,
+                "user_id": current_user["user_id"]
+            }
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(ZARINPAL_API, json=payload)
+            result = response.json()
+        
+        if result.get("data") and result["data"].get("code") == 100:
+            authority = result["data"]["authority"]
+            payment_url = f"https://sandbox.zarinpal.com/pg/StartPay/{authority}"
+            
+            payment_id = await execute_query(
+                """
+                INSERT INTO payments (
+                    user_id, reservation_id, amount,
+                    payment_method_id, status, transaction_id,
+                    currency, payment_details
+                ) VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    current_user["user_id"],
+                    reservation_id,
+                    payment.amount,
+                    payment.payment_method_id,
+                    authority,
+                    payment.currency,
+                    {"payment_url": payment_url, "gateway": "zarinpal"}
+                ),
+                fetch_one=True
+            )
+            
+            return {
+                "payment_url": payment_url,
+                "payment_id": payment_id["id"],
+                "status": "pending"
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Payment gateway error"
+            )
+    else:
+        payment_id = await execute_query(
+            """
+            INSERT INTO payments (
+                user_id, reservation_id, amount,
+                payment_method_id, status, transaction_id, currency
+            ) VALUES (%s, %s, %s, %s, 'successful', %s, %s)
+            RETURNING id
+            """,
+            (
+                current_user["user_id"],
+                reservation_id,
+                payment.amount,
+                payment.payment_method_id,
+                transaction_id,
+                payment.currency
+            ),
+            fetch_one=True
+        )
+        
+        await execute_query(
+            """
+            UPDATE user_reservations 
+            SET status = 'paid', payment_id = %s 
+            WHERE id = %s
+            """,
+            (payment_id["id"], reservation_id),
+            commit=True
+        )
+        
+        return {
+            "payment_id": payment_id["id"],
+            "status": "successful",
+            "transaction_id": transaction_id
+        }
+
+@router.get("/{reservation_id}/verify-payment", response_model=dict)
+async def verify_payment(
+    reservation_id: int,
+    Authority: str = Query(..., alias="Authority"),
+    Status: str = Query(..., alias="Status"),
+    current_user: dict = Depends(get_current_user)
+):
+    if Status != "OK":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment was canceled or failed"
+        )
+
+    payment = await execute_query(
+        """
+        SELECT p.*, r.user_id
+        FROM payments p
+        JOIN user_reservations r ON p.reservation_id = r.id
+        WHERE p.transaction_id = %s AND p.status = 'pending' AND r.id = %s
+        """,
+        (Authority, reservation_id),
+        fetch_one=True
+    )
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pending payment not found"
+        )
+    
+    if payment["user_id"] != current_user["user_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to verify this payment"
+        )
+
+    verify_payload = {
+        "merchant_id": ZARINPAL_MERCHANT_ID,
+        "amount": int(payment["amount"]),
+        "authority": Authority,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(ZARINPAL_VERIFY_API, json=verify_payload)
+        result = response.json()
+
+    if result.get("data") and result["data"].get("code") == 100:
+        await execute_query(
+            """
+            UPDATE payments 
+            SET status = 'successful', 
+                payment_date = NOW(),
+                updated_at = NOW(),
+                payment_details = %s
+            WHERE id = %s
+            """,
+            (result["data"], payment["id"]),
+            commit=True
+        )
+        
+        await execute_query(
+            """
+            UPDATE user_reservations 
+            SET status = 'paid', 
+                payment_id = %s, 
+                updated_at = NOW() 
+            WHERE id = %s
+            """,
+            (payment["id"], reservation_id),
+            commit=True
+        )
+        
+        return {"status": "successful", "message": "Payment verified successfully"}
+    else:
+        await execute_query(
+            """
+            UPDATE payments 
+            SET status = 'failed', 
+                updated_at = NOW(),
+                payment_details = %s
+            WHERE id = %s
+            """,
+            (result.get("errors", {}), payment["id"]),
+            commit=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment verification failed"
+        )
+
+@router.post("/cleanup-expired", status_code=status.HTTP_200_OK)
+async def cleanup_expired_reservations(
+    current_user: dict = Depends(require_roles("admin"))
+):
+    expired_reservations = await execute_query(
+        """
+        SELECT id, ticket_id FROM user_reservations
+        WHERE status = 'temporary' AND expires_at <= NOW()
+        """,
+        fetch_all=True
+    )
+
+    for res in expired_reservations:
+        await execute_query(
+            "UPDATE user_reservations SET status = 'expired' WHERE id = %s",
+            (res["id"],),
+            commit=True
+        )
+        
+        await execute_query(
+            "UPDATE travel_tickets SET available_seats = available_seats + 1 WHERE id = %s",
+            (res["ticket_id"],),
+            commit=True
+        )
+
+    return {"canceled_reservations_count": len(expired_reservations)}
+
+@router.get("/user/{user_id}/history", response_model=List[ReservationResponse])
+async def get_user_reservation_history(
+    user_id: int,
+    status: Optional[ReservationStatus] = None,
+    transport_type: Optional[TransportType] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
+    if user_id != current_user["user_id"] and not await has_permission(current_user["user_id"], "view_all:reservations"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this user's reservations"
+        )
+    
+    query = """
+    SELECT r.*, 
+           t.departure_city, t.arrival_city, t.departure_time, 
+           t.arrival_time, t.price as ticket_price, t.currency as ticket_currency,
+           t.transport_type, t.class_type, t.available_seats,
+           p.status as payment_status, p.transaction_id, p.payment_date
+    FROM user_reservations r
+    JOIN travel_tickets t ON r.ticket_id = t.id
+    LEFT JOIN payments p ON r.payment_id = p.id
+    WHERE r.user_id = %s
+    """
+    params = [user_id]
+    
+    if status:
+        query += " AND r.status = %s"
+        params.append(status.value)
+    
+    if transport_type:
+        query += " AND t.transport_type = %s"
+        params.append(transport_type.value)
+    
+    if start_date:
+        query += " AND r.reserved_at >= %s"
+        params.append(start_date)
+    
+    if end_date:
+        query += " AND r.reserved_at <= %s"
+        params.append(end_date)
+    
+    query += " ORDER BY r.reserved_at DESC LIMIT %s OFFSET %s"
+    params.extend([limit, skip])
+    
+    reservations = await execute_query(query, params, fetch_all=True)
+    
+    formatted_reservations = []
+    for res in reservations:
+        formatted = {
+            **res,
+            "ticket_details": {
+                "departure_city": res.pop("departure_city"),
+                "arrival_city": res.pop("arrival_city"),
+                "departure_time": res.pop("departure_time"),
+                "arrival_time": res.pop("arrival_time"),
+                "price": res.pop("ticket_price"),
+                "currency": res.pop("ticket_currency"),
+                "transport_type": res.pop("transport_type"),
+                "class_type": res.pop("class_type"),
+                "available_seats": res.pop("available_seats")
+            }
+        }
+        
+        if res["payment_id"]:
+            formatted["payment_details"] = {
+                "status": res.pop("payment_status"),
+                "transaction_id": res.pop("transaction_id"),
+                "payment_date": res.pop("payment_date")
+            }
+        
+        formatted_reservations.append(formatted)
+    
+    return formatted_reservations
+
