@@ -214,3 +214,212 @@ async def update_flight_details(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+@router.post("/train-details", status_code=status.HTTP_201_CREATED)
+async def create_train_details(
+    detail: TrainDetailCreate,
+    current_user: dict = Depends(require_roles("admin", "provider"))
+):
+    await _verify_ticket(detail.ticket_id, "train")
+    await connect_db()
+    try:
+        detail_id = await execute_query(
+            """
+            INSERT INTO train_details (
+                ticket_id, train_star_rating, private_cabin
+            ) VALUES (%s, %s, %s)
+            RETURNING id
+            """,
+            (
+                detail.ticket_id,
+                detail.train_star_rating,
+                detail.private_cabin
+            ),
+            fetch_one=True
+        )
+        await close_db()
+        return {"detail_id": detail_id["id"]}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.get("/train-details/{ticket_id}", response_model=Dict[str, Any])
+async def get_train_details(
+    ticket_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    await _verify_ticket(ticket_id, "train")
+    await connect_db()
+
+    details = await execute_query(
+        "SELECT * FROM train_details WHERE ticket_id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if not details:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Train details not found for this ticket"
+        )
+    
+    features = await execute_query(
+        """
+        SELECT f.id, f.name, f.description
+        FROM train_features tf
+        JOIN features f ON tf.feature_id = f.id
+        WHERE tf.train_id = %s
+        """,
+        (details["id"],),
+        fetch_all=True
+    )
+    await close_db()
+    details["features"] = features
+    return details
+
+@router.patch("/train-details/{ticket_id}", response_model=Dict[str, Any])
+async def update_train_details(
+    ticket_id: int,
+    update_data: TrainDetailUpdate,
+    current_user: dict = Depends(require_roles("admin", "provider"))
+):
+    await _verify_ticket(ticket_id, "train")
+    await connect_db()
+
+    update_values = update_data.dict(exclude_unset=True)
+    if not update_values:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields to update"
+        )
+    
+    set_clause = ", ".join([f"{field} = %s" for field in update_values.keys()])
+    values = list(update_values.values())
+    values.append(ticket_id)
+    
+    try:
+        await execute_query(
+            f"""
+            UPDATE train_details 
+            SET {set_clause}
+            WHERE ticket_id = %s
+            """,
+            values,
+            commit=True
+        )
+        await close_db()
+        return await get_train_details(ticket_id, current_user)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.post("/bus-details", status_code=status.HTTP_201_CREATED)
+async def create_bus_details(
+    detail: BusDetailCreate,
+    current_user: dict = Depends(require_roles("admin", "provider"))
+):
+    await _verify_ticket(detail.ticket_id, "bus")
+    await connect_db()
+
+    try:
+        detail_id = await execute_query(
+            """
+            INSERT INTO bus_details (
+                ticket_id, bus_company, bus_type, seats_per_row
+            ) VALUES (%s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                detail.ticket_id,
+                detail.bus_company,
+                detail.bus_type.value,
+                detail.seats_per_row.value
+            ),
+            fetch_one=True
+        )
+        await close_db()
+        return {"detail_id": detail_id["id"]}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.get("/bus-details/{ticket_id}", response_model=Dict[str, Any])
+async def get_bus_details(
+    ticket_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    await _verify_ticket(ticket_id, "bus")
+    await connect_db()
+
+    details = await execute_query(
+        "SELECT * FROM bus_details WHERE ticket_id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if not details:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bus details not found for this ticket"
+        )
+    
+    features = await execute_query(
+        """
+        SELECT f.id, f.name, f.description
+        FROM bus_features bf
+        JOIN features f ON bf.feature_id = f.id
+        WHERE bf.bus_id = %s
+        """,
+        (details["id"],),
+        fetch_all=True
+    )
+    await close_db()
+    details["features"] = features
+    return details
+
+@router.put("/bus-details/{ticket_id}", response_model=Dict[str, Any])
+async def update_bus_details(
+    ticket_id: int,
+    update_data: BusDetailUpdate,
+    current_user: dict = Depends(require_roles("admin", "provider"))
+):
+    await _verify_ticket(ticket_id, "bus")
+    await connect_db()
+
+    update_values = update_data.dict(exclude_unset=True)
+    if not update_values:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields to update"
+        )
+    
+    if "bus_type" in update_values:
+        update_values["bus_type"] = update_values["bus_type"].value
+    if "seats_per_row" in update_values:
+        update_values["seats_per_row"] = update_values["seats_per_row"].value
+    
+    set_clause = ", ".join([f"{field} = %s" for field in update_values.keys()])
+    values = list(update_values.values())
+    values.append(ticket_id)
+    
+    try:
+        await execute_query(
+            f"""
+            UPDATE bus_details 
+            SET {set_clause}
+            WHERE ticket_id = %s
+            """,
+            values,
+            commit=True
+        )
+        await close_db()
+        return await get_bus_details(ticket_id, current_user)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
