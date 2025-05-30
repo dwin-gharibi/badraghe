@@ -353,3 +353,101 @@ async def get_ticket_discounts(
         fetch_all=True
     )
     return discounts
+
+@router.get("/user-loyalty/{user_id}", response_model=dict)
+async def get_user_loyalty(
+    user_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "read:loyalty"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this loyalty information"
+        )
+    
+    loyalty = await execute_query(
+        "SELECT * FROM user_loyalty WHERE user_id = %s",
+        (user_id,),
+        fetch_one=True
+    )
+    if not loyalty:
+        return {"user_id": user_id, "total_points": 0}
+    return loyalty
+
+@router.post("/user-loyalty/{user_id}/add-points", status_code=status.HTTP_200_OK)
+async def add_loyalty_points(
+    user_id: int,
+    points: LoyaltyPointsUpdate,
+    current_user: dict = Depends(require_roles("admin"))
+):
+    if points.points <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Points must be greater than 0"
+        )
+    
+    try:
+        await execute_query(
+            """
+            INSERT INTO user_loyalty (user_id, total_points, last_transaction)
+            VALUES (%s, %s, NOW())
+            ON DUPLICATE KEY UPDATE 
+            total_points = total_points + VALUES(total_points),
+            last_transaction = VALUES(last_transaction)
+            """,
+            (user_id, points.points),
+            commit=True
+        )
+        return {"message": f"Added {points.points} loyalty points to user"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.post("/user-loyalty/{user_id}/redeem", status_code=status.HTTP_200_OK)
+async def redeem_loyalty_points(
+    user_id: int,
+    points: LoyaltyPointsUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "update:loyalty"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to redeem points for this user"
+        )
+    
+    if points.points <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Points must be greater than 0"
+        )
+    
+    loyalty = await execute_query(
+        "SELECT total_points FROM user_loyalty WHERE user_id = %s",
+        (user_id,),
+        fetch_one=True
+    )
+    if not loyalty or loyalty["total_points"] < points.points:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Not enough loyalty points"
+        )
+    
+    try:
+        await execute_query(
+            """
+            UPDATE user_loyalty 
+            SET total_points = total_points - %s,
+                last_transaction = NOW()
+            WHERE user_id = %s
+            """,
+            (points.points, user_id),
+            commit=True
+        )
+        return {"message": f"Redeemed {points.points} loyalty points"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
