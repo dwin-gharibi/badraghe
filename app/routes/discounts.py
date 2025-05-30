@@ -187,3 +187,169 @@ async def update_discount(
             detail=str(e)
         )
 
+@router.patch("/{discount_id}", response_model=dict)
+async def partial_update_discount(
+    discount_id: int,
+    discount: DiscountUpdate,
+    current_user: dict = Depends(require_roles("admin"))
+):
+    update_data = discount.dict(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields to update"
+        )
+
+    if "discount_type" in update_data:
+        valid_types = ["percentage", "fixed"]
+        if update_data["discount_type"] not in valid_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid discount type. Must be one of: {', '.join(valid_types)}"
+            )
+
+    if "discount_value" in update_data:
+        if "discount_type" in update_data:
+            discount_type = update_data["discount_type"]
+        else:
+            current_discount = await _get_discount(discount_id)
+            discount_type = current_discount["discount_type"]
+        
+        if discount_type == "percentage" and not (0 <= update_data["discount_value"] <= 100):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Percentage discount must be between 0 and 100"
+            )
+        elif discount_type == "fixed" and update_data["discount_value"] <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Fixed discount must be greater than 0"
+            )
+
+    if "code" in update_data:
+        existing = await execute_query(
+            "SELECT 1 FROM discounts WHERE code = %s AND id != %s",
+            (update_data["code"], discount_id),
+            fetch_one=True
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Discount with this code already exists"
+            )
+
+    set_clause = ", ".join([f"{field} = %s" for field in update_data.keys()])
+    values = list(update_data.values())
+    values.append(discount_id)
+
+    try:
+        await execute_query(
+            f"UPDATE discounts SET {set_clause} WHERE id = %s",
+            values,
+            commit=True
+        )
+        return await _get_discount(discount_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.delete("/{discount_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_discount(
+    discount_id: int,
+    current_user: dict = Depends(require_roles("admin"))
+):
+    affected = await execute_query(
+        "DELETE FROM discounts WHERE id = %s",
+        (discount_id,),
+        commit=True
+    )
+    if not affected:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Discount not found"
+        )
+
+@router.post("/apply-to-ticket", status_code=status.HTTP_200_OK)
+async def apply_discount_to_ticket(
+    ticket_id: int,
+    discount_id: int,
+    current_user: dict = Depends(require_roles("admin"))
+):
+    ticket = await execute_query(
+        "SELECT 1 FROM travel_tickets WHERE id = %s",
+        (ticket_id,),
+        fetch_one=True
+    )
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found"
+        )
+    
+    discount = await execute_query(
+        """
+        SELECT 1 FROM discounts 
+        WHERE id = %s AND status = TRUE 
+        AND valid_from <= NOW() AND valid_until >= NOW()
+        """,
+        (discount_id,),
+        fetch_one=True
+    )
+    if not discount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Discount not valid or expired"
+        )
+    
+    try:
+        await execute_query(
+            "INSERT IGNORE INTO ticket_discounts (ticket_id, discount_id) VALUES (%s, %s)",
+            (ticket_id, discount_id),
+            commit=True
+        )
+        return {"message": "Discount applied to ticket"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.delete("/remove-from-ticket", status_code=status.HTTP_200_OK)
+async def remove_discount_from_ticket(
+    ticket_id: int,
+    discount_id: int,
+    current_user: dict = Depends(require_roles("admin"))
+):
+    affected = await execute_query(
+        "DELETE FROM ticket_discounts WHERE ticket_id = %s AND discount_id = %s",
+        (ticket_id, discount_id),
+        commit=True
+    )
+    if not affected:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Discount not applied to this ticket"
+        )
+    return {"message": "Discount removed from ticket"}
+
+@router.get("/ticket/{ticket_id}", response_model=List[dict])
+async def get_ticket_discounts(
+    ticket_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    discounts = await execute_query(
+        """
+        SELECT d.*
+        FROM ticket_discounts td
+        JOIN discounts d ON td.discount_id = d.id
+        WHERE td.ticket_id = %s
+        AND d.status = TRUE 
+        AND d.valid_from <= NOW() 
+        AND d.valid_until >= NOW()
+        """,
+        (ticket_id,),
+        fetch_all=True
+    )
+    return discounts
