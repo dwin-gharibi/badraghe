@@ -157,3 +157,23 @@ async def favicon():
 @app.get("/", tags=["System"], summary="Health check and welcome message")
 async def root():
     return {"message": "Welcome to Badraghe"}
+
+@app.post("/token", tags=["System"])
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    await connect_db()
+
+    user = await execute_query(
+        "SELECT id, password FROM users WHERE email = %s", 
+        (form_data.username,),
+        fetch_one=True
+    )
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+
+    if not verify_password(form_data.password, user["password"]):
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+
+    token = create_access_token({"user_id": user["id"]})
+
+    return {"access_token": token, "token_type": "bearer"}
