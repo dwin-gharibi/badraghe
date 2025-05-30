@@ -260,3 +260,185 @@ async def get_report_stats(
         stats["by_category"][row["category"]] = row["count"]
     
     return stats
+
+@router.patch("/{report_id}", response_model=ReportResponse)
+async def update_report(
+    report_id: int,
+    update: ReportUpdate,
+    current_user: dict = Depends(require_roles("admin", "support_agent"))
+):
+    report = await execute_query(
+        "SELECT * FROM reports WHERE id = %s",
+        (report_id,),
+        fetch_one=True
+    )
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    set_clause = []
+    params = []
+    
+    if update.status:
+        valid_statuses = ["pending", "reviewed", "resolved"]
+        if update.status not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            )
+        set_clause.append("status = %s")
+        params.append(update.status)
+    
+    if update.resolution:
+        set_clause.append("resolution = %s")
+        params.append(update.resolution)
+    
+    if update.assigned_to:
+        user = await execute_query(
+            """
+            SELECT 1 FROM user_role ur 
+            JOIN roles r ON ur.role_id = r.id 
+            WHERE ur.user_id = %s AND r.name IN ('admin', 'support_agent')
+            """,
+            (update.assigned_to,),
+            fetch_one=True
+        )
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Assigned user must be admin or support agent"
+            )
+        set_clause.append("assigned_to = %s")
+        params.append(update.assigned_to)
+    
+    if not set_clause:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields to update"
+        )
+    
+    params.append(report_id)
+    
+    try:
+        await execute_query(
+            f"UPDATE reports SET {', '.join(set_clause)} WHERE id = %s",
+            params,
+            commit=True
+        )
+        return await execute_query(
+            "SELECT * FROM reports WHERE id = %s",
+            (report_id,),
+            fetch_one=True
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_report(
+    report_id: int,
+    current_user: dict = Depends(require_roles("admin"))
+):
+    report = await execute_query(
+        "SELECT 1 FROM reports WHERE id = %s",
+        (report_id,),
+        fetch_one=True
+    )
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    try:
+        await execute_query(
+            "DELETE FROM reports WHERE id = %s",
+            (report_id,),
+            commit=True
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.post("/{report_id}/comments", status_code=status.HTTP_201_CREATED)
+async def add_report_comment(
+    report_id: int,
+    comment: str,
+    current_user: dict = Depends(get_current_user)
+):
+    report = await execute_query(
+        "SELECT user_id FROM reports WHERE id = %s",
+        (report_id,),
+        fetch_one=True
+    )
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+    
+    if (current_user["user_id"] != report["user_id"] and 
+        not has_permission(current_user, ["admin", "support_agent"])):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to comment on this report"
+        )
+
+    try:
+        await execute_query(
+            """
+            INSERT INTO report_comments (
+                report_id, user_id, comment
+            ) VALUES (%s, %s, %s)
+            """,
+            (report_id, current_user["user_id"], comment),
+            commit=True
+        )
+        return {"message": "Comment added successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.get("/{report_id}/comments", response_model=List[dict])
+async def get_report_comments(
+    report_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    report = await execute_query(
+        "SELECT user_id FROM reports WHERE id = %s",
+        (report_id,),
+        fetch_one=True
+    )
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+    
+    if (current_user["user_id"] != report["user_id"] and 
+        not has_permission(current_user, ["admin", "support_agent"])):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view comments for this report"
+        )
+
+    comments = await execute_query(
+        """
+        SELECT rc.*, u.email, u.first_name, u.last_name
+        FROM report_comments rc
+        JOIN users u ON rc.user_id = u.id
+        WHERE rc.report_id = %s
+        ORDER BY rc.created_at
+        """,
+        (report_id,),
+        fetch_all=True
+    )
+    return comments
