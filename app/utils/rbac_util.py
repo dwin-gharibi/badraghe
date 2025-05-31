@@ -17,3 +17,6 @@ async def get_user_roles(user_id: int):
         fetch_all=True
     )
     return [role["name"] for role in roles] if roles else []
+
+async def is_admin(user_id: int):
+    return "admin" in get_user_roles(user_id=user_id)
