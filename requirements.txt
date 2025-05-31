@@ -9,3 +9,4 @@ pytest
 httpx
 jwt
 passlib
+pydantic[email]
