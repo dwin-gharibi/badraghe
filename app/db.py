@@ -26,6 +26,7 @@ async def execute_query(
     fetch_one: bool = False,
     fetch_all: bool = False,
     return_lastrowid: bool = False,
+    return_rowcount: bool = False,
     commit: bool = False
 ):
     async with pool.acquire() as conn:
@@ -35,6 +36,10 @@ async def execute_query(
             if return_lastrowid:
                 await conn.commit()
                 return cur.lastrowid
+
+            if return_rowcount:
+                await conn.commit()
+                return cur.rowcount
 
             if fetch_one:
                 result = await cur.fetchone()
@@ -47,5 +52,3 @@ async def execute_query(
                 await conn.commit()
 
             return result
-
-

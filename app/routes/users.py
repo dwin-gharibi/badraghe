@@ -99,7 +99,6 @@ async def update_user(
             commit=True
         )
         
-        await close_db()
         return await get_user(user_id, current_user)
     except Exception as e:
         raise HTTPException(
@@ -107,7 +106,7 @@ async def update_user(
             detail=str(e)
         )
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}", status_code=status.HTTP_200_OK)
 async def delete_user(
     user_id: int,
     current_user: dict = Depends(require_roles("admin"))
@@ -119,18 +118,22 @@ async def delete_user(
         )
     
     await connect_db()
-    affected = await execute_query(
-        "UPDATE users SET status = FALSE WHERE id = %s AND status = TRUE",
-        (user_id,),
-        commit=True
-    )
-    await close_db()
-
-    if not affected:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found or already inactive"
+    try:
+        affected = await execute_query(
+            "UPDATE users SET status = 0 WHERE id = %s AND status = 1",
+            (user_id,),
+            return_rowcount=True
         )
+        if affected == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found or already inactive"
+            )
+    finally:
+        await close_db()
+
+    return {"message": "User deleted successfully"}
+
 
 @router.patch("/{user_id}/status", status_code=status.HTTP_200_OK)
 async def update_user_status(
