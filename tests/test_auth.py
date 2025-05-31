@@ -10,8 +10,9 @@ client = TestClient(app)
 
 def test_signup_missing_fields():
     response = client.post("/signup", json={"email": "john@example.com"})
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Missing required fields"
+    assert response.status_code == 422
+    assert "first_name" in response.json()["detail"][0]["loc"]
+
 
 def test_signup_short_password():
     response = client.post("/signup", json={
