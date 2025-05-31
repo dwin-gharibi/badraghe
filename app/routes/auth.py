@@ -5,6 +5,8 @@ from app.db import connect_db, close_db , execute_query
 from fastapi import APIRouter, Request, HTTPException, status, Depends
 from app.utils.security_util import hash_password
 import random
+import re
+from app.utils.sms_util import send_sms_ir_otp
 
 router = APIRouter()
 
@@ -16,36 +18,50 @@ class SignupRequest(BaseModel):
     password: str
 
 class OTPRequest(BaseModel):
-    email_or_phone: str
+    phone: str
 
 class OTPVerify(BaseModel):
-    email_or_phone: str
+    phone: str
     otp_code: str
 
-async def send_otp_via_email_or_sms(destination: str, otp: str):
-    print(f"Sending OTP {otp} to {destination}")
+def is_valid_iranian_number(phone: str) -> bool:
+    return re.match(r"^\+989\d{9}$", phone) is not None
 
 @router.post("/send-otp")
 async def send_otp(data: OTPRequest):
     redis = await get_redis()
-    await connect_db()
+
+    if not is_valid_iranian_number(data.phone):
+        raise HTTPException(status_code=400, detail="Invalid Iranian phone number format. Use +98 format.")
+
+    limit_key = f"otp_limit:{data.phone}"
+    attempts = await redis.get(limit_key)
+    attempts = int(attempts or 0)
+
+    if attempts >= 5:
+        raise HTTPException(status_code=429, detail="OTP limit reached. Try again in 1 hour.")
+
     otp = f"{random.randint(100000, 999999)}"
-    await redis.set(f"otp:{data.email_or_phone}", otp, ex=300)
-    await send_otp_via_email_or_sms(data.email_or_phone, otp)
-    await close_db()
-    return {"msg": "OTP sent"}
+    await redis.set(f"otp:{data.phone}", otp, ex=300)
+
+    await redis.incr(limit_key)
+    await redis.expire(limit_key, 3600)
+
+    sms_ir_result = await send_sms_ir_otp(data.phone, otp)
+
+    return {"msg": f"OTP sent {otp}", "sms_ir_result": sms_ir_result}
 
 @router.post("/verify-otp")
 async def verify_otp(data: OTPVerify):
     redis = await get_redis()
     await connect_db()
-    stored_otp = await redis.get(f"otp:{data.email_or_phone}")
+    stored_otp = await redis.get(f"otp:{data.phone}")
     if not stored_otp or stored_otp != data.otp_code:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
     user = await execute_query(
         "SELECT id FROM users WHERE email = %s OR phone = %s", 
-        (data.email_or_phone, data.email_or_phone),
+        (data.phone, data.phone),
         fetch_one=True
     )
     if not user:
