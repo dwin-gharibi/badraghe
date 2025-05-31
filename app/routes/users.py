@@ -138,23 +138,23 @@ async def delete_user(
 @router.patch("/{user_id}/status", status_code=status.HTTP_200_OK)
 async def update_user_status(
     user_id: int,
-    status: bool,
+    user_status: bool,
     current_user: dict = Depends(require_roles("admin"))
 ):
     await connect_db()
     affected = await execute_query(
         "UPDATE users SET status = %s WHERE id = %s",
-        (status, user_id),
-        commit=True
+        (user_status, user_id),
+        return_rowcount=True
     )
     await close_db()
 
-    if not affected:
+    if affected == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
-    return {"message": f"User status set to {status}"}
+    return {"message": f"User status set to {user_status}"}
 
 @router.get("/{user_id}/roles", response_model=List[dict])
 async def get_user_roles(
