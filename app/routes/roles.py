@@ -78,13 +78,13 @@ async def create_role(
             INSERT INTO roles (
                 name, description, parent_role_id, status
             ) VALUES (%s, %s, %s, %s)
-            RETURNING id
             """,
             (
                 role.name, role.description,
                 role.parent_role_id, role.status
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return {"role_id": role_id["id"]}
@@ -408,13 +408,13 @@ async def create_permission(
             INSERT INTO permissions (
                 name, description, type, status
             ) VALUES (%s, %s, %s, %s)
-            RETURNING id
             """,
             (
                 permission.name, permission.description,
                 permission.type, permission.status
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return {"permission_id": perm_id["id"]}

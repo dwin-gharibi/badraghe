@@ -105,7 +105,6 @@ async def create_payment(
                 user_id, reservation_id, amount,
                 payment_method_id, status, transaction_id, currency
             ) VALUES (%s, %s, %s, %s, 'successful', %s, %s)
-            RETURNING id
             """,
             (
                 current_user["user_id"],
@@ -115,7 +114,8 @@ async def create_payment(
                 transaction_id,
                 payment.currency
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         
         await execute_query(
@@ -213,7 +213,6 @@ async def request_refund(
                 user_id, payment_id, reason,
                 status, refund_amount
             ) VALUES (%s, %s, %s, 'pending', %s)
-            RETURNING id
             """,
             (
                 current_user["user_id"],
@@ -221,7 +220,8 @@ async def request_refund(
                 reason,
                 payment["amount"]
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return {"refund_id": refund_id["id"], "status": "pending"}

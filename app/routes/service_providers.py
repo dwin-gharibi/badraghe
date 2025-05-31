@@ -71,13 +71,13 @@ async def create_service_provider(
                 name, contact_email, contact_phone, 
                 address, website_url
             ) VALUES (%s, %s, %s, %s, %s)
-            RETURNING id
             """,
             (
                 provider.name, provider.contact_email, provider.contact_phone,
                 provider.address, provider.website_url
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return {"provider_id": provider_id["id"]}

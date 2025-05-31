@@ -125,10 +125,10 @@ async def create_support_category(
             """
             INSERT INTO support_categories (name, description)
             VALUES (%s, %s)
-            RETURNING *
             """,
             (category.name, category.description),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return category_data
@@ -173,10 +173,10 @@ async def update_support_category(
             UPDATE support_categories
             SET name = %s, description = %s
             WHERE id = %s
-            RETURNING *
             """,
             (category.name, category.description, category_id),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return updated
@@ -210,7 +210,6 @@ async def create_support_ticket(
                 user_id, category_id, subject,
                 description, status, priority
             ) VALUES (%s, %s, %s, %s, 'open', %s)
-            RETURNING *
             """,
             (
                 current_user["user_id"],
@@ -219,7 +218,8 @@ async def create_support_ticket(
                 ticket.description,
                 ticket.priority.value
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         
         await execute_query(
@@ -498,7 +498,6 @@ async def add_ticket_message(
             INSERT INTO support_ticket_conversations (
                 ticket_id, user_id, message, message_type
             ) VALUES (%s, %s, %s, %s)
-            RETURNING *
             """,
             (
                 ticket_id,
@@ -506,7 +505,8 @@ async def add_ticket_message(
                 message.message,
                 message.message_type.value
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         
         if ticket["status"] == "closed":

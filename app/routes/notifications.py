@@ -211,7 +211,6 @@ async def create_notification(
                 user_id, message, status,
                 notification_type, metadata
             ) VALUES (%s, %s, 'pending', %s, %s)
-            RETURNING *
             """,
             (
                 notification.user_id,
@@ -219,7 +218,8 @@ async def create_notification(
                 notification.notification_type.value,
                 notification.metadata or {}
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         
         await close_db()

@@ -68,10 +68,10 @@ async def create_report(
             INSERT INTO reports (
                 user_id, ticket_id, category, message, status
             ) VALUES (%s, %s, %s, %s, 'pending')
-            RETURNING *
             """,
             (current_user["user_id"], report.ticket_id, report.category, report.message),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return report_data

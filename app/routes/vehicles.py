@@ -109,14 +109,14 @@ async def create_flight_details(
                 stops, flight_number, departure_airport,
                 arrival_airport
             ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
             """,
             (
                 detail.ticket_id, detail.airline_name, detail.flight_class.value,
                 detail.stops, detail.flight_number, detail.departure_airport,
                 detail.arrival_airport
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return {"detail_id": detail_id["id"]}
@@ -228,14 +228,14 @@ async def create_train_details(
             INSERT INTO train_details (
                 ticket_id, train_star_rating, private_cabin
             ) VALUES (%s, %s, %s)
-            RETURNING id
             """,
             (
                 detail.ticket_id,
                 detail.train_star_rating,
                 detail.private_cabin
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return {"detail_id": detail_id["id"]}
@@ -330,7 +330,6 @@ async def create_bus_details(
             INSERT INTO bus_details (
                 ticket_id, bus_company, bus_type, seats_per_row
             ) VALUES (%s, %s, %s, %s)
-            RETURNING id
             """,
             (
                 detail.ticket_id,
@@ -338,7 +337,8 @@ async def create_bus_details(
                 detail.bus_type.value,
                 detail.seats_per_row.value
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return {"detail_id": detail_id["id"]}
@@ -435,10 +435,10 @@ async def create_feature(
             """
             INSERT INTO features (name, description)
             VALUES (%s, %s)
-            RETURNING id
             """,
             (feature.name, feature.description),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return {"feature_id": feature_id["id"]}

@@ -5,8 +5,10 @@ from pydantic import BaseModel
 from enum import Enum
 from app.db import execute_query, connect_db, close_db
 from app.utils.auth_util import get_current_user, require_roles
+from app.utils.rbac_util import is_admin
 import httpx
 import uuid
+import json
 
 router = APIRouter(prefix="/reservations")
 
@@ -148,7 +150,6 @@ async def create_reservation(
             user_id, ticket_id, status, 
             reserved_at, expires_at, notes
         ) VALUES (%s, %s, 'temporary', %s, %s, %s)
-        RETURNING id
         """,
         (
             current_user["user_id"],
@@ -157,7 +158,8 @@ async def create_reservation(
             expires_at,
             reservation.notes
         ),
-        fetch_one=True
+        fetch_one=True,
+        return_lastrowid=True
     )
 
     await execute_query(
@@ -183,7 +185,7 @@ async def get_reservation(
         )
     
     if (reservation["user_id"] != current_user["user_id"] and 
-        not await has_permission(current_user["user_id"], "view_all:reservations")):
+        not await has_permission(current_user["user_id"], "view_all:reservations") and not is_admin(current_user["user_id"])):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this reservation"
@@ -210,7 +212,7 @@ async def check_reservation_exists(
             detail="Reservation not found"
         )
     
-    if not await has_permission(current_user["user_id"], "view_all:reservations"):
+    if not await has_permission(current_user["user_id"], "view_all:reservations") and not is_admin(current_user["user_id"]):
         user_reservation = await execute_query(
             "SELECT 1 FROM user_reservations WHERE id = %s AND user_id = %s",
             (reservation_id, current_user["user_id"]),
@@ -243,7 +245,7 @@ async def update_reservation(
         )
     
     if (reservation["user_id"] != current_user["user_id"] and 
-        not await has_permission(current_user["user_id"], "manage_all:reservations")):
+        not await has_permission(current_user["user_id"], "manage_all:reservations") and not is_admin(current_user["user_id"])):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this reservation"
@@ -321,7 +323,7 @@ async def delete_reservation(
         )
     
     if (reservation["user_id"] != current_user["user_id"] and 
-        not await has_permission(current_user["user_id"], "delete_all:reservations")):
+        not await has_permission(current_user["user_id"], "delete_all:reservations") and not is_admin(current_user["user_id"])):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this reservation"
@@ -404,6 +406,8 @@ async def pay_for_reservation(
             authority = result["data"]["authority"]
             payment_url = f"https://sandbox.zarinpal.com/pg/StartPay/{authority}"
             
+            payment_details_json = json.dumps({"payment_url": payment_url, "gateway": "zarinpal"})
+
             payment_id = await execute_query(
                 """
                 INSERT INTO payments (
@@ -411,7 +415,6 @@ async def pay_for_reservation(
                     payment_method_id, status, transaction_id,
                     currency, payment_details
                 ) VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s)
-                RETURNING id
                 """,
                 (
                     current_user["user_id"],
@@ -420,14 +423,14 @@ async def pay_for_reservation(
                     payment.payment_method_id,
                     authority,
                     payment.currency,
-                    {"payment_url": payment_url, "gateway": "zarinpal"}
+                    payment_details_json
                 ),
-                fetch_one=True
+                return_lastrowid=True
             )
-            
+
             return {
                 "payment_url": payment_url,
-                "payment_id": payment_id["id"],
+                "payment_id": payment_id,
                 "status": "pending"
             }
         else:
@@ -442,7 +445,6 @@ async def pay_for_reservation(
                 user_id, reservation_id, amount,
                 payment_method_id, status, transaction_id, currency
             ) VALUES (%s, %s, %s, %s, 'successful', %s, %s)
-            RETURNING id
             """,
             (
                 current_user["user_id"],
@@ -452,7 +454,8 @@ async def pay_for_reservation(
                 transaction_id,
                 payment.currency
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         
         await execute_query(
@@ -466,7 +469,7 @@ async def pay_for_reservation(
         )
         
         return {
-            "payment_id": payment_id["id"],
+            "payment_id": payment_id,
             "status": "successful",
             "transaction_id": transaction_id
         }
@@ -590,7 +593,7 @@ async def cleanup_expired_reservations(
 @router.get("/user/{user_id}/history", response_model=List[ReservationResponse])
 async def get_user_reservation_history(
     user_id: int,
-    status: Optional[ReservationStatus] = None,
+    reservation_status: Optional[ReservationStatus] = None,
     transport_type: Optional[TransportType] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
@@ -598,7 +601,7 @@ async def get_user_reservation_history(
     limit: int = 100,
     current_user: dict = Depends(get_current_user)
 ):
-    if user_id != current_user["user_id"] and not await has_permission(current_user["user_id"], "view_all:reservations"):
+    if user_id != current_user["user_id"] and not await has_permission(current_user["user_id"], "view_all:reservations") and not is_admin(current_user["user_id"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this user's reservations"
@@ -617,9 +620,9 @@ async def get_user_reservation_history(
     """
     params = [user_id]
     
-    if status:
+    if reservation_status:
         query += " AND r.status = %s"
-        params.append(status.value)
+        params.append(reservation_status.value)
     
     if transport_type:
         query += " AND t.transport_type = %s"
@@ -774,7 +777,7 @@ async def user_cancel_reservation(
     await connect_db()
 
     reservation = await execute_query(
-        "SELECT * FROM user_reservations WHERE id = %s AND user_id = %s AND status = 'paid'",
+        "SELECT * FROM user_reservations WHERE id = %s AND user_id = %s",
         (reservation_id, user_id),
         fetch_one=True,
     )
@@ -802,13 +805,14 @@ async def user_cancel_reservation(
     penalty_percent = penalty_info.get("penalty_percent", 0)
     refund_amount = price_paid * (100 - penalty_percent) / 100
 
-    await execute_query(
-        """
-        INSERT INTO refund_requests (user_id, payment_id, reason, status, refund_amount, request_date, created_at, updated_at)
-        VALUES (%s, %s, %s, 'pending', %s, NOW(), NOW(), NOW())
-        """,
-        (user_id, reservation["payment_id"], cancellation_reason, refund_amount),
-    )
+    if reservation["status"] == "paid":
+        await execute_query(
+            """
+            INSERT INTO refund_requests (user_id, payment_id, reason, status, refund_amount, request_date, created_at, updated_at)
+            VALUES (%s, %s, %s, 'pending', %s, NOW(), NOW(), NOW())
+            """,
+            (user_id, reservation["payment_id"], cancellation_reason, refund_amount),
+        )
 
     await close_db()
 

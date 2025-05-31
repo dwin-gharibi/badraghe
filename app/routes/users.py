@@ -1,11 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from typing import List, Optional
 from app.db import execute_query, close_db, connect_db
 from app.utils.auth_util import get_current_user, require_roles
-from app.utils.rbac_util import has_permission
+from app.utils.rbac_util import has_permission, is_admin
 from app.config import settings
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import date
 
 router = APIRouter(prefix="/users")
+
+class UserUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    country: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    zip_code: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = None
+    bio: Optional[str] = None
 
 @router.get("/", response_model=List[dict])
 async def get_users(
@@ -37,7 +52,7 @@ async def get_user(
     user_id: int,
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "read:users"):
+    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "read:users") and not is_admin(current_user["user_id"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this user"
@@ -70,35 +85,42 @@ async def get_user(
 @router.put("/{user_id}", response_model=dict)
 async def update_user(
     user_id: int,
-    update_data: dict,
+    update_data: UserUpdate = Body(...),
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "update:users"):
+    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "update:users") and not is_admin(current_user["user_id"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this user"
         )
 
     await connect_db()
+    update_dict = update_data.dict(exclude_unset=True)
+    
     allowed_fields = {
         "first_name", "last_name", "country", "state", "city",
         "address", "zip_code", "date_of_birth", "gender", "bio"
     }
-    
-    if not await has_permission(current_user["user_id"], "update:users"):
-        update_data = {k: v for k, v in update_data.items() if k in allowed_fields}
 
-    set_clause = ", ".join([f"{field} = %s" for field in update_data.keys()])
-    values = list(update_data.values())
+    if not await has_permission(current_user["user_id"], "update:users"):
+        update_dict = {k: v for k, v in update_dict.items() if k in allowed_fields}
+
+    if not update_dict:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid fields to update"
+        )
+
+    set_clause = ", ".join([f"{field} = %s" for field in update_dict.keys()])
+    values = list(update_dict.values())
     values.append(user_id)
 
     try:
         await execute_query(
             f"UPDATE users SET {set_clause} WHERE id = %s",
-            values,
+            tuple(values),
             commit=True
         )
-        
         return await get_user(user_id, current_user)
     except Exception as e:
         raise HTTPException(
@@ -161,7 +183,7 @@ async def get_user_roles(
     user_id: int,
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "read:user_roles"):
+    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "read:user_roles") and not is_admin(current_user["user_id"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view these roles"
@@ -186,7 +208,7 @@ async def get_user_permissions(
     user_id: int,
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "read:user_permissions"):
+    if current_user["user_id"] != user_id and not await has_permission(current_user["user_id"], "read:user_permissions") and not is_admin(current_user["user_id"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view these permissions"

@@ -81,13 +81,13 @@ async def create_discount(
                 code, discount_type, discount_value,
                 valid_from, valid_until, status
             ) VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id
             """,
             (
                 discount.code, discount.discount_type, discount.discount_value,
                 discount.valid_from, discount.valid_until, discount.status
             ),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         return {"discount_id": discount_id["id"]}
     except Exception as e:

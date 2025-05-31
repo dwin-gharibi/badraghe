@@ -36,10 +36,10 @@ async def create_feature(
             """
             INSERT INTO features (name, description)
             VALUES (%s, %s)
-            RETURNING id
             """,
             (feature.name, feature.description),
-            fetch_one=True
+            fetch_one=True,
+            return_lastrowid=True
         )
         await close_db()
         return {"feature_id": feature_id["id"]}
