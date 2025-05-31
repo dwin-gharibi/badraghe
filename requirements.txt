@@ -10,3 +10,4 @@ httpx
 jwt
 passlib
 pydantic[email]
+python-multipart
