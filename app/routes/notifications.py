@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from enum import Enum
 from app.db import execute_query, connect_db, close_db
 from app.utils.auth_util import get_current_user, require_roles
-from app.utils.rbac_util import has_permission
+from app.utils.rbac_util import has_permission, is_admin
 
 router = APIRouter(prefix="/notifications")
 
@@ -24,14 +24,12 @@ class NotificationCreate(BaseModel):
     user_id: int
     message: str
     notification_type: NotificationType = NotificationType.SYSTEM
-    metadata: Optional[dict] = None
 
 class NotificationUpdate(BaseModel):
     message: Optional[str] = None
     status: Optional[NotificationStatus] = None
     notification_type: Optional[NotificationType] = None
     is_read: Optional[bool] = None
-    metadata: Optional[dict] = None
 
 class NotificationResponse(BaseModel):
     id: int
@@ -43,7 +41,6 @@ class NotificationResponse(BaseModel):
     sent_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-    metadata: Optional[dict] = None
     user_email: Optional[str] = None
 
 class NotificationStatsResponse(BaseModel):
@@ -52,6 +49,86 @@ class NotificationStatsResponse(BaseModel):
     sent: int
     failed: int
     by_type: Dict[str, int]
+
+
+@router.get("/unread-count", response_model=dict)
+async def get_unread_notification_count(
+    current_user: dict = Depends(get_current_user)
+):
+    await connect_db()
+    count = await execute_query(
+        "SELECT COUNT(*) as count FROM notifications WHERE user_id = %s AND is_read = FALSE",
+        (current_user["user_id"],),
+        fetch_one=True
+    )
+    await close_db()
+    return {"unread_count": count["count"]}
+
+@router.get("/stats", response_model=NotificationStatsResponse)
+async def get_notification_stats(
+        user_id: Optional[int] = None,
+        current_user: dict = Depends(require_roles("admin"))
+):
+    await connect_db()
+    where_clause = "WHERE 1=1"
+    params = []
+
+    if user_id:
+        where_clause += " AND user_id = %s"
+        params.append(user_id)
+
+    status_counts = await execute_query(
+        f"""
+        SELECT status, COUNT(*) as count 
+        FROM notifications
+        {where_clause}
+        GROUP BY status
+        """,
+        params,
+        fetch_all=True
+    )
+
+    type_counts = await execute_query(
+        f"""
+        SELECT notification_type, COUNT(*) as count 
+        FROM notifications
+        {where_clause}
+        GROUP BY notification_type
+        """,
+        params,
+        fetch_all=True
+    )
+
+    unread_count = await execute_query(
+        f"""
+        SELECT COUNT(*) as count 
+        FROM notifications
+        {where_clause} AND is_read = FALSE
+        """,
+        params,
+        fetch_one=True
+    )
+
+    stats = {
+        "total_notifications": 0,
+        "unread": unread_count["count"],
+        "sent": 0,
+        "failed": 0,
+        "by_type": {}
+    }
+
+    for row in status_counts:
+        stats["total_notifications"] += row["count"]
+        if row["status"] == "sent":
+            stats["sent"] = row["count"]
+        elif row["status"] == "failed":
+            stats["failed"] = row["count"]
+
+    for row in type_counts:
+        stats["by_type"][row["notification_type"]] = row["count"]
+
+    await close_db()
+    return stats
 
 @router.get("/", response_model=List[NotificationResponse])
 async def get_user_notifications(
@@ -176,7 +253,7 @@ async def get_notification_details(
         )
     
     if (notification["user_id"] != current_user["user_id"] and 
-        not await has_permission(current_user["user_id"], "view_all:notifications")):
+        not await has_permission(current_user["user_id"], "view_all:notifications") and not is_admin(current_user["user_id"])):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this notification"
@@ -189,7 +266,7 @@ async def get_notification_details(
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=NotificationResponse)
 async def create_notification(
     notification: NotificationCreate,
-    current_user: dict = Depends(require_roles("admin", "support_agent"))
+    current_user: dict = Depends(require_roles("admin"))
 ):
     await connect_db()
 
@@ -209,14 +286,13 @@ async def create_notification(
             """
             INSERT INTO notifications (
                 user_id, message, status,
-                notification_type, metadata
-            ) VALUES (%s, %s, 'pending', %s, %s)
+                notification_type
+            ) VALUES (%s, %s, 'pending', %s)
             """,
             (
                 notification.user_id,
                 notification.message,
                 notification.notification_type.value,
-                notification.metadata or {}
             ),
             fetch_one=True,
             return_lastrowid=True
@@ -224,7 +300,7 @@ async def create_notification(
         
         await close_db()
         
-        return await get_notification_details(notification_data["id"])
+        return await get_notification_details(notification_data)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -236,7 +312,6 @@ async def create_batch_notifications(
     user_ids: List[int],
     message: str,
     notification_type: NotificationType = NotificationType.SYSTEM,
-    metadata: Optional[dict] = None,
     current_user: dict = Depends(require_roles("admin"))
 ):
     await connect_db()
@@ -263,14 +338,13 @@ async def create_batch_notifications(
                 """
                 INSERT INTO notifications (
                     user_id, message, status,
-                    notification_type, metadata
-                ) VALUES (%s, %s, 'pending', %s, %s)
+                    notification_type
+                ) VALUES (%s, %s, 'pending', %s)
                 """,
                 (
                     user_id,
                     message,
                     notification_type.value,
-                    metadata or {}
                 ),
                 commit=True
             )
@@ -320,10 +394,6 @@ async def update_notification(
         set_clause.append("is_read = %s")
         params.append(update.is_read)
     
-    if update.metadata is not None:
-        set_clause.append("metadata = %s")
-        params.append(update.metadata or {})
-    
     if not set_clause:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -345,6 +415,46 @@ async def update_notification(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+@router.patch("/batch/read", status_code=status.HTTP_204_NO_CONTENT)
+async def mark_multiple_notifications_as_read(
+        notification_ids: List[int],
+        current_user: dict = Depends(get_current_user)
+):
+    await connect_db()
+
+    if not notification_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one notification_id must be provided"
+        )
+
+    valid_notifications = await execute_query(
+        f"""
+        SELECT COUNT(*) as count FROM notifications 
+        WHERE id IN ({','.join(['%s'] * len(notification_ids))}) 
+        AND user_id = %s
+        """,
+        [*notification_ids, current_user["user_id"]],
+        fetch_one=True
+    )
+
+    if valid_notifications["count"] != len(notification_ids):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="One or more notifications not found or not owned by user"
+        )
+
+    await execute_query(
+        f"""
+        UPDATE notifications SET is_read = TRUE 
+        WHERE id IN ({','.join(['%s'] * len(notification_ids))})
+        """,
+        notification_ids,
+        commit=True
+    )
+    await close_db()
 
 @router.patch("/{notification_id}/read", status_code=status.HTTP_204_NO_CONTENT)
 async def mark_notification_as_read(
@@ -370,45 +480,6 @@ async def mark_notification_as_read(
     )
     await close_db()
 
-@router.patch("/batch/read", status_code=status.HTTP_204_NO_CONTENT)
-async def mark_multiple_notifications_as_read(
-    notification_ids: List[int],
-    current_user: dict = Depends(get_current_user)
-):
-    await connect_db()
-
-    if not notification_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least one notification_id must be provided"
-        )
-    
-    valid_notifications = await execute_query(
-        f"""
-        SELECT COUNT(*) as count FROM notifications 
-        WHERE id IN ({','.join(['%s']*len(notification_ids))}) 
-        AND user_id = %s
-        """,
-        [*notification_ids, current_user["user_id"]],
-        fetch_one=True
-    )
-    
-    if valid_notifications["count"] != len(notification_ids):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="One or more notifications not found or not owned by user"
-        )
-    
-    await execute_query(
-        f"""
-        UPDATE notifications SET is_read = TRUE 
-        WHERE id IN ({','.join(['%s']*len(notification_ids))})
-        """,
-        notification_ids,
-        commit=True
-    )
-    await close_db()
-
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_notification(
     notification_id: int,
@@ -428,7 +499,7 @@ async def delete_notification(
         )
     
     if (notification["user_id"] != current_user["user_id"] and 
-        not await has_permission(current_user["user_id"], "delete_all:notifications")):
+        not await has_permission(current_user["user_id"], "delete_all:notifications") and not is_admin(current_user["user_id"])):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this notification"
@@ -452,82 +523,3 @@ async def delete_all_user_notifications(
         commit=True
     )
     await close_db()
-
-@router.get("/unread-count", response_model=dict)
-async def get_unread_notification_count(
-    current_user: dict = Depends(get_current_user)
-):
-    await connect_db()
-    count = await execute_query(
-        "SELECT COUNT(*) as count FROM notifications WHERE user_id = %s AND is_read = FALSE",
-        (current_user["user_id"],),
-        fetch_one=True
-    )
-    await close_db()
-    return {"unread_count": count["count"]}
-
-@router.get("/stats", response_model=NotificationStatsResponse)
-async def get_notification_stats(
-    user_id: Optional[int] = None,
-    current_user: dict = Depends(require_roles("admin"))
-):
-    await connect_db()
-    where_clause = "WHERE 1=1"
-    params = []
-    
-    if user_id:
-        where_clause += " AND user_id = %s"
-        params.append(user_id)
-    
-    status_counts = await execute_query(
-        f"""
-        SELECT status, COUNT(*) as count 
-        FROM notifications
-        {where_clause}
-        GROUP BY status
-        """,
-        params,
-        fetch_all=True
-    )
-    
-    type_counts = await execute_query(
-        f"""
-        SELECT notification_type, COUNT(*) as count 
-        FROM notifications
-        {where_clause}
-        GROUP BY notification_type
-        """,
-        params,
-        fetch_all=True
-    )
-    
-    unread_count = await execute_query(
-        f"""
-        SELECT COUNT(*) as count 
-        FROM notifications
-        {where_clause} AND is_read = FALSE
-        """,
-        params,
-        fetch_one=True
-    )
-    
-    stats = {
-        "total_notifications": 0,
-        "unread": unread_count["count"],
-        "sent": 0,
-        "failed": 0,
-        "by_type": {}
-    }
-    
-    for row in status_counts:
-        stats["total_notifications"] += row["count"]
-        if row["status"] == "sent":
-            stats["sent"] = row["count"]
-        elif row["status"] == "failed":
-            stats["failed"] = row["count"]
-    
-    for row in type_counts:
-        stats["by_type"][row["notification_type"]] = row["count"]
-    
-    await close_db()
-    return stats
