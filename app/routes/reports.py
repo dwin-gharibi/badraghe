@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel
 from app.db import execute_query, connect_db, close_db
 from app.utils.auth_util import get_current_user, require_roles
-from app.utils.rbac_util import get_user_roles, has_permission
+from app.utils.rbac_util import get_user_roles, has_permission, is_admin
 
 router = APIRouter(prefix="/reports")
 
@@ -37,7 +37,112 @@ class ReportStatsResponse(BaseModel):
     resolved: int
     by_category: Dict[str, int]
 
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=ReportResponse)
+
+@router.get("/all", response_model=List[ReportResponse])
+async def get_all_reports(
+        status_filter: Optional[str] = None,
+        category: Optional[str] = None,
+        assigned_to: Optional[int] = None,
+        user_id: Optional[int] = None,
+        ticket_id: Optional[int] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        skip: int = 0,
+        limit: int = 100,
+        current_user: dict = Depends(require_roles("admin"))
+):
+    await connect_db()
+    query = """
+    SELECT r.*, 
+           u.email as user_email, u.first_name as user_first_name,
+           t.id as ticket_id, a.email as assigned_email
+    FROM reports r
+    JOIN users u ON r.user_id = u.id
+    LEFT JOIN travel_tickets t ON r.ticket_id = t.id
+    LEFT JOIN users a ON r.assigned_to = a.id
+    WHERE 1=1
+    """
+    params = []
+
+    if status_filter:
+        query += " AND r.status = %s"
+        params.append(status_filter)
+
+    if category:
+        query += " AND r.category = %s"
+        params.append(category)
+
+    if assigned_to:
+        query += " AND r.assigned_to = %s"
+        params.append(assigned_to)
+
+    if user_id:
+        query += " AND r.user_id = %s"
+        params.append(user_id)
+
+    if ticket_id:
+        query += " AND r.ticket_id = %s"
+        params.append(ticket_id)
+
+    if start_date:
+        query += " AND r.created_at >= %s"
+        params.append(start_date)
+
+    if end_date:
+        query += " AND r.created_at <= %s"
+        params.append(end_date)
+
+    query += " ORDER BY r.created_at DESC LIMIT %s OFFSET %s"
+    params.extend([limit, skip])
+
+    reports = await execute_query(query, params, fetch_all=True)
+    await close_db()
+    return reports
+
+
+@router.get("/stats", response_model=ReportStatsResponse)
+async def get_report_stats(
+        time_range: Optional[str] = Query(None, description="Time range: today, week, month, year"),
+        current_user: dict = Depends(require_roles("admin"))
+):
+    base_query = "SELECT COUNT(*) as count, status FROM reports"
+    time_conditions = {
+        "today": "DATE(created_at) = CURRENT_DATE",
+        "week": "created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)",
+        "month": "created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 1 MONTH)",
+        "year": "created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 1 YEAR)"
+    }
+
+    where_clause = f" WHERE {time_conditions[time_range]}" if time_range else ""
+
+    status_counts = await execute_query(
+        f"{base_query}{where_clause} GROUP BY status",
+        fetch_all=True
+    )
+
+    category_counts = await execute_query(
+        f"SELECT category, COUNT(*) as count FROM reports{where_clause} GROUP BY category",
+        fetch_all=True
+    )
+
+    stats = {
+        "total_reports": 0,
+        "pending": 0,
+        "reviewed": 0,
+        "resolved": 0,
+        "by_category": {}
+    }
+
+    for row in status_counts:
+        stats["total_reports"] += row["count"]
+        stats[row["status"]] = row["count"]
+
+    for row in category_counts:
+        stats["by_category"][row["category"]] = row["count"]
+
+    return stats
+
+@router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_report(
     report: ReportCreate,
     current_user: dict = Depends(get_current_user)
@@ -73,7 +178,6 @@ async def create_report(
             fetch_one=True,
             return_lastrowid=True
         )
-        await close_db()
         return report_data
     except Exception as e:
         raise HTTPException(
@@ -148,7 +252,7 @@ async def get_report_details(
         )
     
     if (current_user["user_id"] != report["user_id"] and 
-        not has_permission(current_user, ["admin", "support_agent"])):
+        not has_permission(current_user, ["admin"])):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this report"
@@ -158,114 +262,11 @@ async def get_report_details(
     
     return report
 
-@router.get("/admin/all", response_model=List[ReportResponse])
-async def get_all_reports(
-    status_filter: Optional[str] = None,
-    category: Optional[str] = None,
-    assigned_to: Optional[int] = None,
-    user_id: Optional[int] = None,
-    ticket_id: Optional[int] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    skip: int = 0,
-    limit: int = 100,
-    current_user: dict = Depends(require_roles("admin", "support_agent"))
-):
-    await connect_db()
-    query = """
-    SELECT r.*, 
-           u.email as user_email, u.first_name as user_first_name,
-           t.id as ticket_id, a.email as assigned_email
-    FROM reports r
-    JOIN users u ON r.user_id = u.id
-    LEFT JOIN travel_tickets t ON r.ticket_id = t.id
-    LEFT JOIN users a ON r.assigned_to = a.id
-    WHERE 1=1
-    """
-    params = []
-    
-    if status_filter:
-        query += " AND r.status = %s"
-        params.append(status_filter)
-    
-    if category:
-        query += " AND r.category = %s"
-        params.append(category)
-    
-    if assigned_to:
-        query += " AND r.assigned_to = %s"
-        params.append(assigned_to)
-    
-    if user_id:
-        query += " AND r.user_id = %s"
-        params.append(user_id)
-    
-    if ticket_id:
-        query += " AND r.ticket_id = %s"
-        params.append(ticket_id)
-    
-    if start_date:
-        query += " AND r.created_at >= %s"
-        params.append(start_date)
-    
-    if end_date:
-        query += " AND r.created_at <= %s"
-        params.append(end_date)
-    
-    query += " ORDER BY r.created_at DESC LIMIT %s OFFSET %s"
-    params.extend([limit, skip])
-    
-    reports = await execute_query(query, params, fetch_all=True)
-    await close_db()
-    return reports
-
-@router.get("/admin/stats", response_model=ReportStatsResponse)
-async def get_report_stats(
-    time_range: Optional[str] = Query(None, description="Time range: today, week, month, year"),
-    current_user: dict = Depends(require_roles("admin", "support_agent"))
-):
-    base_query = "SELECT COUNT(*) as count, status FROM reports"
-    time_conditions = {
-        "today": "DATE(created_at) = CURRENT_DATE",
-        "week": "created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)",
-        "month": "created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 1 MONTH)",
-        "year": "created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 1 YEAR)"
-    }
-    
-    where_clause = f" WHERE {time_conditions[time_range]}" if time_range else ""
-    
-    status_counts = await execute_query(
-        f"{base_query}{where_clause} GROUP BY status",
-        fetch_all=True
-    )
-    
-    category_counts = await execute_query(
-        f"SELECT category, COUNT(*) as count FROM reports{where_clause} GROUP BY category",
-        fetch_all=True
-    )
-    
-    stats = {
-        "total_reports": 0,
-        "pending": 0,
-        "reviewed": 0,
-        "resolved": 0,
-        "by_category": {}
-    }
-    
-    for row in status_counts:
-        stats["total_reports"] += row["count"]
-        stats[row["status"]] = row["count"]
-    
-    for row in category_counts:
-        stats["by_category"][row["category"]] = row["count"]
-    
-    return stats
-
 @router.patch("/{report_id}", response_model=ReportResponse)
 async def update_report(
     report_id: int,
     update: ReportUpdate,
-    current_user: dict = Depends(require_roles("admin", "support_agent"))
+    current_user: dict = Depends(require_roles("admin"))
 ):
     report = await execute_query(
         "SELECT * FROM reports WHERE id = %s",
@@ -280,7 +281,7 @@ async def update_report(
 
     set_clause = []
     params = []
-    
+
     if update.status:
         valid_statuses = ["pending", "reviewed", "resolved"]
         if update.status not in valid_statuses:
@@ -290,17 +291,17 @@ async def update_report(
             )
         set_clause.append("status = %s")
         params.append(update.status)
-    
+
     if update.resolution:
         set_clause.append("resolution = %s")
         params.append(update.resolution)
-    
+
     if update.assigned_to:
         user = await execute_query(
             """
             SELECT 1 FROM user_role ur 
             JOIN roles r ON ur.role_id = r.id 
-            WHERE ur.user_id = %s AND r.name IN ('admin', 'support_agent')
+            WHERE ur.user_id = %s AND r.name IN ('admin')
             """,
             (update.assigned_to,),
             fetch_one=True
@@ -312,15 +313,15 @@ async def update_report(
             )
         set_clause.append("assigned_to = %s")
         params.append(update.assigned_to)
-    
+
     if not set_clause:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No fields to update"
         )
-    
+
     params.append(report_id)
-    
+
     try:
         await execute_query(
             f"UPDATE reports SET {', '.join(set_clause)} WHERE id = %s",
@@ -366,79 +367,43 @@ async def delete_report(
             detail=str(e)
         )
 
-@router.post("/{report_id}/comments", status_code=status.HTTP_201_CREATED)
+@router.post("/{report_id}/resolve", status_code=status.HTTP_201_CREATED)
 async def add_report_comment(
     report_id: int,
     comment: str,
     current_user: dict = Depends(get_current_user)
 ):
     report = await execute_query(
-        "SELECT user_id FROM reports WHERE id = %s",
+        "SELECT assigned_to FROM reports WHERE id = %s and status != 'resolved'",
         (report_id,),
         fetch_one=True
     )
+
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
+            detail="Report not found or resolved yet."
         )
     
-    if (current_user["user_id"] != report["user_id"] and 
-        not has_permission(current_user, ["admin", "support_agent"])):
+    if current_user["user_id"] != report["assigned_to"] and not await is_admin(current_user["user_id"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to comment on this report"
+            detail="Not authorized to resolve this report"
         )
 
     try:
         await execute_query(
             """
-            INSERT INTO report_comments (
-                report_id, user_id, comment
-            ) VALUES (%s, %s, %s)
+            UPDATE reports 
+            SET resolution = %s, status = 'resolved'
+            WHERE id = %s
             """,
-            (report_id, current_user["user_id"], comment),
+            (comment, report_id),
             commit=True
         )
-        return {"message": "Comment added successfully"}
+        return {"message": "Report resolved successfully"}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
-@router.get("/{report_id}/comments", response_model=List[dict])
-async def get_report_comments(
-    report_id: int,
-    current_user: dict = Depends(get_current_user)
-):
-    report = await execute_query(
-        "SELECT user_id FROM reports WHERE id = %s",
-        (report_id,),
-        fetch_one=True
-    )
-    if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
-        )
-    
-    if (current_user["user_id"] != report["user_id"] and 
-        not has_permission(current_user, ["admin", "support_agent"])):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to view comments for this report"
-        )
-
-    comments = await execute_query(
-        """
-        SELECT rc.*, u.email, u.first_name, u.last_name
-        FROM report_comments rc
-        JOIN users u ON rc.user_id = u.id
-        WHERE rc.report_id = %s
-        ORDER BY rc.created_at
-        """,
-        (report_id,),
-        fetch_all=True
-    )
-    return comments
