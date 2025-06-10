@@ -119,7 +119,7 @@ async def create_flight_details(
             return_lastrowid=True
         )
         await close_db()
-        return {"detail_id": detail_id["id"]}
+        return {"detail_id": detail_id}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -238,7 +238,7 @@ async def create_train_details(
             return_lastrowid=True
         )
         await close_db()
-        return {"detail_id": detail_id["id"]}
+        return {"detail_id": detail_id}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -256,7 +256,8 @@ async def get_train_details(
     details = await execute_query(
         "SELECT * FROM train_details WHERE ticket_id = %s",
         (ticket_id,),
-        fetch_one=True
+        fetch_one=True,
+        return_rowcount=True
     )
     if not details:
         raise HTTPException(
@@ -341,7 +342,7 @@ async def create_bus_details(
             return_lastrowid=True
         )
         await close_db()
-        return {"detail_id": detail_id["id"]}
+        return {"detail_id": detail_id}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -359,7 +360,8 @@ async def get_bus_details(
     details = await execute_query(
         "SELECT * FROM bus_details WHERE ticket_id = %s",
         (ticket_id,),
-        fetch_one=True
+        fetch_one=True,
+        return_rowcount=True
     )
     if not details:
         raise HTTPException(
@@ -441,7 +443,7 @@ async def create_feature(
             return_lastrowid=True
         )
         await close_db()
-        return {"feature_id": feature_id["id"]}
+        return {"feature_id": feature_id}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -552,10 +554,11 @@ async def unassign_feature_from_vehicle(
     affected = await execute_query(
         f"""
         DELETE FROM {table_map[vehicle_type]} 
-        WHERE feature_id = %s AND {table_map[vehicle_type][:5]}_id = %s
+        WHERE feature_id = %s AND {vehicle_type}_id = %s
         """,
         (feature_id, vehicle_id),
-        commit=True
+        commit=True,
+        return_rowcount=True
     )
     if not affected:
         raise HTTPException(
