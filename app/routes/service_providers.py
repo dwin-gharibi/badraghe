@@ -80,7 +80,7 @@ async def create_service_provider(
             return_lastrowid=True
         )
         await close_db()
-        return {"provider_id": provider_id["id"]}
+        return {"provider_id": provider_id}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -229,22 +229,23 @@ async def delete_service_provider(
 @router.patch("/{provider_id}/status", status_code=status.HTTP_200_OK)
 async def update_provider_status(
     provider_id: int,
-    status: bool,
+    provider_status: bool,
     current_user: dict = Depends(require_roles("admin"))
 ):
     await connect_db()
     affected = await execute_query(
         "UPDATE service_providers SET status = %s WHERE id = %s",
-        (status, provider_id),
-        commit=True
+        (provider_status, provider_id),
+        fetch_one=True,
+        return_rowcount=True
     )
     if not affected:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Service provider not found"
+            detail="Service provider not found or not being updated."
         )
     await close_db()
-    return {"message": f"Service provider status set to {status}"}
+    return {"message": f"Service provider status set to {provider_status}"}
 
 @router.get("/{provider_id}/tickets", response_model=List[dict])
 async def get_provider_tickets(
@@ -284,3 +285,33 @@ async def get_provider_tickets(
     tickets = await execute_query(query, params, fetch_all=True)
     await close_db()
     return tickets
+
+@router.get("/{provider_id}/cancellation-penalty", response_model=dict)
+async def get_cancellation_penalty(provider_id: int):
+    try:
+        await connect_db()
+        query = """
+            SELECT id, name, cancellation_penalty 
+            FROM service_providers 
+            WHERE id = %s
+        """
+        provider = await execute_query(query, (provider_id,), fetch_one=True)
+
+        if not provider:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Service provider not found"
+            )
+        await close_db()
+        return {
+            "provider_id": provider["id"],
+            "name": provider["name"],
+            "cancellation_penalty": float(provider["cancellation_penalty"])
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
