@@ -43,6 +43,82 @@ async def _get_role(role_id: int):
         )
     return role
 
+
+@router.post("/permissions", status_code=status.HTTP_201_CREATED)
+async def create_permission(
+        permission: PermissionCreate,
+        current_user: dict = Depends(require_roles("admin"))
+):
+    await connect_db()
+    valid_types = ["create", "read", "update", "delete"]
+    if permission.type not in valid_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid permission type. Must be one of: {', '.join(valid_types)}"
+        )
+
+    existing = await execute_query(
+        "SELECT 1 FROM permissions WHERE name = %s",
+        (permission.name,),
+        fetch_one=True
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Permission with this name already exists"
+        )
+
+    try:
+        perm_id = await execute_query(
+            """
+            INSERT INTO permissions (
+                name, description, type, status
+            ) VALUES (%s, %s, %s, %s)
+            """,
+            (
+                permission.name, permission.description,
+                permission.type, permission.status
+            ),
+            fetch_one=True,
+            return_lastrowid=True
+        )
+        await close_db()
+        return {"permission_id": perm_id}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.get("/permissions", response_model=List[dict])
+async def get_all_permissions(
+        type_filter: Optional[str] = None,
+        status_filter: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
+        current_user: dict = Depends(require_roles("admin"))
+):
+    await connect_db()
+    query = "SELECT * FROM permissions WHERE 1=1"
+    params = []
+
+    if type_filter:
+        query += " AND type = %s"
+        params.append(type_filter)
+
+    if status_filter is not None:
+        query += " AND status = %s"
+        params.append(status_filter)
+
+    query += " ORDER BY name ASC LIMIT %s OFFSET %s"
+    params.extend([limit, skip])
+
+    permissions = await execute_query(query, params, fetch_all=True)
+    await close_db()
+
+    return permissions
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_role(
     role: RoleCreate,
@@ -87,7 +163,7 @@ async def create_role(
             return_lastrowid=True
         )
         await close_db()
-        return {"role_id": role_id["id"]}
+        return {"role_id": role_id}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -176,7 +252,6 @@ async def update_role(
             ),
             commit=True
         )
-        await close_db()
         return await _get_role(role_id)
     except Exception as e:
         raise HTTPException(
@@ -238,7 +313,6 @@ async def partial_update_role(
             values,
             commit=True
         )
-        await close_db()
         return await _get_role(role_id)
     except Exception as e:
         raise HTTPException(
@@ -377,80 +451,6 @@ async def remove_permission_from_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Permission assignment not found"
         )
-
-@router.post("/permissions", status_code=status.HTTP_201_CREATED)
-async def create_permission(
-    permission: PermissionCreate,
-    current_user: dict = Depends(require_roles("admin"))
-):
-    await connect_db()
-    valid_types = ["create", "read", "update", "delete"]
-    if permission.type not in valid_types:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid permission type. Must be one of: {', '.join(valid_types)}"
-        )
-
-    existing = await execute_query(
-        "SELECT 1 FROM permissions WHERE name = %s",
-        (permission.name,),
-        fetch_one=True
-    )
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Permission with this name already exists"
-        )
-
-    try:
-        perm_id = await execute_query(
-            """
-            INSERT INTO permissions (
-                name, description, type, status
-            ) VALUES (%s, %s, %s, %s)
-            """,
-            (
-                permission.name, permission.description,
-                permission.type, permission.status
-            ),
-            fetch_one=True,
-            return_lastrowid=True
-        )
-        await close_db()
-        return {"permission_id": perm_id["id"]}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-
-@router.get("/permissions", response_model=List[dict])
-async def get_all_permissions(
-    type_filter: Optional[str] = None,
-    status_filter: Optional[bool] = None,
-    skip: int = 0,
-    limit: int = 100,
-    current_user: dict = Depends(require_roles("admin"))
-):
-    await connect_db()
-    query = "SELECT * FROM permissions WHERE 1=1"
-    params = []
-    
-    if type_filter:
-        query += " AND type = %s"
-        params.append(type_filter)
-    
-    if status_filter is not None:
-        query += " AND status = %s"
-        params.append(status_filter)
-    
-    query += " ORDER BY name ASC LIMIT %s OFFSET %s"
-    params.extend([limit, skip])
-    
-    permissions = await execute_query(query, params, fetch_all=True)
-    await close_db()
-
-    return permissions
 
 @router.patch("/permissions/{permission_id}", response_model=dict)
 async def update_permission(
