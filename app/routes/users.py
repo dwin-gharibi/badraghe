@@ -3,12 +3,14 @@ from typing import List, Optional
 from app.db import execute_query, close_db, connect_db
 from app.utils.auth_util import get_current_user, require_roles
 from app.utils.rbac_util import has_permission, is_admin
-from app.config import settings
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import date
+from datetime import date, datetime
+from app.utils.cache_util import get_cache, set_cache, delete_cache
+import json
 
 router = APIRouter(prefix="/users")
+CACHE_TTL = 600
 
 class UserUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -21,6 +23,102 @@ class UserUpdate(BaseModel):
     date_of_birth: Optional[date] = None
     gender: Optional[str] = None
     bio: Optional[str] = None
+
+def serialize_dates(obj):
+    if isinstance(obj, dict):
+        return {k: serialize_dates(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_dates(i) for i in obj]
+    elif isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    else:
+        return obj
+    
+@router.get("/profile", response_model=dict)
+async def get_my_profile(
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user["user_id"]
+    cache_key = f"user_profile:{user_id}"
+
+    cached = await get_cache(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    await connect_db()
+    user = await execute_query(
+        """
+        SELECT id, first_name, last_name, email, phone, 
+               country, state, city, address, zip_code,
+               date_of_birth, gender, profile_picture_url,
+               status, is_verified, bio, preferences,
+               last_login, created_at
+        FROM users 
+        WHERE id = %s
+        """,
+        (user_id,),
+        fetch_one=True
+    )
+    await close_db()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await set_cache(cache_key, json.dumps(user, default=serialize_dates), expire_seconds=CACHE_TTL)
+
+    return user
+
+
+@router.put("/profile", response_model=dict)
+async def update_my_profile(
+    profile_update: dict = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user["user_id"]
+
+    allowed_fields = {
+        "first_name", "last_name", "phone",
+        "country", "state", "city", "address", "zip_code",
+        "date_of_birth", "gender", "profile_picture_url",
+        "bio", "preferences"
+    }
+
+    update_data = {k: v for k, v in profile_update.items() if k in allowed_fields}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    set_clause = ", ".join(f"{k} = %s" for k in update_data)
+    values = list(update_data.values())
+    values.append(user_id)
+
+    await connect_db()
+    await execute_query(
+        f"UPDATE users SET {set_clause} WHERE id = %s",
+        values,
+        commit=True
+    )
+
+    cache_key = f"user_profile:{user_id}"
+    await delete_cache(cache_key)
+
+    user = await execute_query(
+        """
+        SELECT id, first_name, last_name, email, phone, 
+               country, state, city, address, zip_code,
+               date_of_birth, gender, profile_picture_url,
+               status, is_verified, bio, preferences,
+               last_login, created_at
+        FROM users 
+        WHERE id = %s
+        """,
+        (user_id,),
+        fetch_one=True
+    )
+    await set_cache(cache_key, json.dumps(user, default=serialize_dates), expire_seconds=CACHE_TTL)
+    
+    await close_db()
+
+    return user
 
 @router.get("/", response_model=List[dict])
 async def get_users(
@@ -64,7 +162,7 @@ async def get_user(
         SELECT id, first_name, last_name, email, phone, 
                country, state, city, address, zip_code,
                date_of_birth, gender, profile_picture_url,
-               status, is_verified, bio, preferences,
+               status, is_verified, bio, preferences, balance,
                last_login, created_at
         FROM users 
         WHERE id = %s
@@ -127,7 +225,6 @@ async def update_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-
 @router.delete("/{user_id}", status_code=status.HTTP_200_OK)
 async def delete_user(
     user_id: int,
@@ -142,20 +239,19 @@ async def delete_user(
     await connect_db()
     try:
         affected = await execute_query(
-            "UPDATE users SET status = 0 WHERE id = %s AND status = 1",
+            "DELETE FROM users WHERE id = %s",
             (user_id,),
             return_rowcount=True
         )
         if affected == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found or already inactive"
+                detail="User not found"
             )
     finally:
         await close_db()
 
     return {"message": "User deleted successfully"}
-
 
 @router.patch("/{user_id}/status", status_code=status.HTTP_200_OK)
 async def update_user_status(
@@ -177,6 +273,28 @@ async def update_user_status(
             detail="User not found"
         )
     return {"message": f"User status set to {user_status}"}
+
+
+@router.patch("/{user_id}/balance", status_code=status.HTTP_200_OK)
+async def update_user_status(
+    user_id: int,
+    user_balance: int,
+    current_user: dict = Depends(require_roles("admin"))
+):
+    await connect_db()
+    affected = await execute_query(
+        "UPDATE users SET balance = %s WHERE id = %s",
+        (user_balance, user_id),
+        return_rowcount=True
+    )
+    await close_db()
+
+    if affected == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return {"message": f"User balance set to {user_balance} IRR"}
 
 @router.get("/{user_id}/roles", response_model=List[dict])
 async def get_user_roles(
@@ -236,3 +354,29 @@ async def get_user_permissions(
     await close_db()
     
     return permissions
+
+
+@router.get("/{user_id}/balance", response_model=int)
+async def get_user_balance(
+        user_id: int,
+        current_user: dict = Depends(get_current_user)
+):
+    if current_user["user_id"] != user_id and not is_admin(
+            current_user["user_id"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view user balance"
+        )
+    await connect_db()
+    user = await execute_query(
+        """
+        SELECT balance
+        FROM users
+        WHERE id = %s
+        """,
+        (user_id,),
+        fetch_one=True
+    )
+    await close_db()
+
+    return user["balance"]
