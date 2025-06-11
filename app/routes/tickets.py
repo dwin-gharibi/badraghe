@@ -5,6 +5,7 @@ from enum import Enum
 from datetime import datetime
 from app.db import execute_query, connect_db, close_db
 from app.redis import get_redis
+from app.utils.cache_util import get_cache, set_cache, delete_cache
 from app.utils.auth_util import get_current_user, require_roles
 import json
 import hashlib
@@ -214,7 +215,7 @@ async def search_tickets(
     }
     cache_key = await generate_cache_key(cache_params)
     
-    cached = await redis.get(cache_key)
+    cached = await get_cache(cache_key)
     if cached:
         return json.loads(cached)
     
@@ -274,7 +275,7 @@ async def search_tickets(
         if ticket_details:
             detailed_tickets.append(ticket_details)
     
-    await redis.set(cache_key, json.dumps(detailed_tickets, default=str), ex=CACHE_TTL)
+    await set_cache(cache_key, json.dumps(detailed_tickets, default=str), expire_seconds=CACHE_TTL)
 
     return detailed_tickets
 
