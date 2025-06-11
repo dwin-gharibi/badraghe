@@ -8,6 +8,17 @@ class Settings(BaseSettings):
     mysql_password: str = os.getenv("MYSQL_PASSWORD")
     mysql_db: str = os.getenv("MYSQL_DB")
 
+    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    celery_broker_url: str = redis_url
+    celery_result_backend: str = redis_url
+
+    mail_host: str = os.getenv("MAIL_HOST", "smtp.c1.liara.email")
+    mail_port: int = int(os.getenv("MAIL_PORT", 465))
+    mail_user: str = os.getenv("MAIL_USER", "")
+    mail_password: str = os.getenv("MAIL_PASSWORD", "")
+    mail_from_address: str = os.getenv("MAIL_FROM_ADDRESS", "")
+    mail_form_name: str = os.getenv("MAIL_FROM_NAME", "")
+
     redis_host: str = os.getenv("REDIS_HOST")
     redis_port: int = int(os.getenv("REDIS_PORT"))
     redis_db: int = int(os.getenv("REDIS_DB"))
