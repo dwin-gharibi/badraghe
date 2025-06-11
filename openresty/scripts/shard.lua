@@ -44,11 +44,12 @@ local function sanitize_headers(headers, backend_host)
     local new_headers = {}
     for k, v in pairs(headers) do
         local lower_k = k:lower()
-        if lower_k ~= "host" and lower_k ~= "connection" and lower_k ~= "content-length" then
+        if lower_k ~= "host" and lower_k ~= "connection" and lower_k ~= "content-length" and lower_k ~= "accept-encoding" then
             new_headers[k] = v
         end
     end
     new_headers["Host"] = backend_host:gsub("^https?://", "")
+    new_headers["Accept-Encoding"] = "gzip, deflate, br"
     return new_headers
 end
 
