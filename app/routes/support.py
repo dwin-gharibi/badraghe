@@ -95,7 +95,7 @@ async def get_support_categories(
     params = []
     
     if not include_inactive:
-        query += " WHERE status = TRUE"
+        query += " WHERE status = FALSE"
     
     query += " ORDER BY name"
     
@@ -229,7 +229,7 @@ async def create_support_ticket(
             ) VALUES (%s, %s, %s, 'user')
             """,
             (
-                ticket_data["id"],
+                ticket_data,
                 current_user["user_id"],
                 ticket.description
             ),
