@@ -89,7 +89,7 @@ async def create_discount(
             fetch_one=True,
             return_lastrowid=True
         )
-        return {"discount_id": discount_id["id"]}
+        return {"discount_id": discount_id}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
