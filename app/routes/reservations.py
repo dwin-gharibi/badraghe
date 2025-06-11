@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import Query, APIRouter, Path, HTTPException, status, Depends, Header
 from typing import Optional, List, Dict
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ from app.utils.rbac_util import is_admin
 import httpx
 import uuid
 import json
+from app.utils.task_manager import schedule_reservation_cancellation
 
 router = APIRouter(prefix="/reservations")
 
@@ -32,11 +33,9 @@ class TransportType(str, Enum):
 
 class ReservationCreate(BaseModel):
     ticket_id: int
-    notes: Optional[str] = None
 
 class ReservationUpdate(BaseModel):
     status: Optional[ReservationStatus] = None
-    notes: Optional[str] = None
 
 class ReservationResponse(BaseModel):
     id: int
@@ -48,7 +47,6 @@ class ReservationResponse(BaseModel):
     reserved_at: datetime
     expires_at: Optional[datetime] = None
     payment_id: Optional[int] = None
-    notes: Optional[str] = None
     ticket_details: Optional[dict] = None
     payment_details: Optional[dict] = None
 
@@ -64,6 +62,72 @@ class ReservationStatsResponse(BaseModel):
     paid: int
     canceled: int
     by_transport_type: Dict[str, int]
+
+
+@router.get("/stats", response_model=ReservationStatsResponse)
+async def get_reservation_stats(
+        transport_type: Optional[TransportType] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        current_user: dict = Depends(require_roles("admin"))
+):
+    where_clause = "WHERE 1=1"
+    params = []
+
+    if transport_type:
+        where_clause += " AND t.transport_type = %s"
+        params.append(transport_type.value)
+
+    if start_date:
+        where_clause += " AND r.reserved_at >= %s"
+        params.append(start_date)
+
+    if end_date:
+        where_clause += " AND r.reserved_at <= %s"
+        params.append(end_date)
+
+    status_counts = await execute_query(
+        f"""
+        SELECT r.status, COUNT(*) as count
+        FROM user_reservations r
+        JOIN travel_tickets t ON r.ticket_id = t.id
+        {where_clause}
+        GROUP BY r.status
+        """,
+        params,
+        fetch_all=True
+    )
+
+    transport_counts = await execute_query(
+        f"""
+        SELECT t.transport_type, COUNT(*) as count
+        FROM user_reservations r
+        JOIN travel_tickets t ON r.ticket_id = t.id
+        {where_clause}
+        GROUP BY t.transport_type
+        """,
+        params,
+        fetch_all=True
+    )
+
+    stats = {
+        "total_reservations": 0,
+        "temporary": 0,
+        "reserved": 0,
+        "paid": 0,
+        "canceled": 0,
+        "by_transport_type": {}
+    }
+
+    for row in status_counts:
+        stats["total_reservations"] += row["count"]
+        stats[row["status"]] = row["count"]
+
+    for row in transport_counts:
+        stats["by_transport_type"][row["transport_type"]] = row["count"]
+
+    return stats
+
 
 async def get_reservation_details(reservation_id: int) -> Optional[dict]:
     await connect_db()
@@ -148,15 +212,13 @@ async def create_reservation(
         """
         INSERT INTO user_reservations (
             user_id, ticket_id, status, 
-            reserved_at, expires_at, notes
-        ) VALUES (%s, %s, 'temporary', %s, %s, %s)
+            reserved_at
+        ) VALUES (%s, %s, 'temporary', %s)
         """,
         (
             current_user["user_id"],
             reservation.ticket_id,
             reserved_at,
-            expires_at,
-            reservation.notes
         ),
         fetch_one=True,
         return_lastrowid=True
@@ -167,8 +229,9 @@ async def create_reservation(
         (reservation.ticket_id,),
         commit=True
     )
+    schedule_reservation_cancellation(reservation_id, delay_seconds=60)
     await close_db()
-    return await get_reservation_details(reservation_id["id"])
+    return await get_reservation_details(reservation_id)
 
 @router.get("/{reservation_id}", response_model=ReservationResponse)
 async def get_reservation(
@@ -279,11 +342,7 @@ async def update_reservation(
                 (reservation["ticket_id"],),
                 commit=True
             )
-    
-    if update.notes is not None:
-        set_clause.append("notes = %s")
-        params.append(update.notes)
-    
+
     if not set_clause:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -464,7 +523,7 @@ async def pay_for_reservation(
             SET status = 'paid', payment_id = %s 
             WHERE id = %s
             """,
-            (payment_id["id"], reservation_id),
+            (payment_id, reservation_id),
             commit=True
         )
         
@@ -563,33 +622,6 @@ async def verify_payment(
             detail="Payment verification failed"
         )
 
-@router.post("/cleanup-expired", status_code=status.HTTP_200_OK)
-async def cleanup_expired_reservations(
-    current_user: dict = Depends(require_roles("admin"))
-):
-    expired_reservations = await execute_query(
-        """
-        SELECT id, ticket_id FROM user_reservations
-        WHERE status = 'temporary' AND expires_at <= NOW()
-        """,
-        fetch_all=True
-    )
-
-    for res in expired_reservations:
-        await execute_query(
-            "UPDATE user_reservations SET status = 'expired' WHERE id = %s",
-            (res["id"],),
-            commit=True
-        )
-        
-        await execute_query(
-            "UPDATE travel_tickets SET available_seats = available_seats + 1 WHERE id = %s",
-            (res["ticket_id"],),
-            commit=True
-        )
-
-    return {"canceled_reservations_count": len(expired_reservations)}
-
 @router.get("/user/{user_id}/history", response_model=List[ReservationResponse])
 async def get_user_reservation_history(
     user_id: int,
@@ -669,70 +701,6 @@ async def get_user_reservation_history(
     
     return formatted_reservations
 
-@router.get("/stats", response_model=ReservationStatsResponse)
-async def get_reservation_stats(
-    transport_type: Optional[TransportType] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    current_user: dict = Depends(require_roles("admin"))
-):
-    where_clause = "WHERE 1=1"
-    params = []
-    
-    if transport_type:
-        where_clause += " AND t.transport_type = %s"
-        params.append(transport_type.value)
-    
-    if start_date:
-        where_clause += " AND r.reserved_at >= %s"
-        params.append(start_date)
-    
-    if end_date:
-        where_clause += " AND r.reserved_at <= %s"
-        params.append(end_date)
-    
-    status_counts = await execute_query(
-        f"""
-        SELECT r.status, COUNT(*) as count
-        FROM user_reservations r
-        JOIN travel_tickets t ON r.ticket_id = t.id
-        {where_clause}
-        GROUP BY r.status
-        """,
-        params,
-        fetch_all=True
-    )
-    
-    transport_counts = await execute_query(
-        f"""
-        SELECT t.transport_type, COUNT(*) as count
-        FROM user_reservations r
-        JOIN travel_tickets t ON r.ticket_id = t.id
-        {where_clause}
-        GROUP BY t.transport_type
-        """,
-        params,
-        fetch_all=True
-    )
-    
-    stats = {
-        "total_reservations": 0,
-        "temporary": 0,
-        "reserved": 0,
-        "paid": 0,
-        "canceled": 0,
-        "by_transport_type": {}
-    }
-    
-    for row in status_counts:
-        stats["total_reservations"] += row["count"]
-        stats[row["status"]] = row["count"]
-    
-    for row in transport_counts:
-        stats["by_transport_type"][row["transport_type"]] = row["count"]
-    
-    return stats
-
 async def has_permission(user_id: int, permission: str) -> bool:
     return await execute_query(
         """
@@ -745,9 +713,57 @@ async def has_permission(user_id: int, permission: str) -> bool:
         fetch_one=True
     ) is not None
 
+@router.get("/penalty/{reservation_id}", response_model=dict)
+async def get_cancellation_penalty(reservation_id: int, current_user: dict = Depends(get_current_user)):
 
-async def check_cancellation_penalty(reservation_id: int) -> dict:
-    return {"penalty_percent": 10}
+    reservation = await execute_query(
+        """
+        SELECT tt.departure_time, tt.transport_company_id
+        FROM user_reservations ur
+        JOIN travel_tickets tt ON ur.ticket_id = tt.id
+        WHERE ur.id = %s
+        """,
+        (reservation_id,),
+        fetch_one=True
+    )
+
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+
+    departure_time = reservation["departure_time"]
+
+    if isinstance(departure_time, str):
+        departure_time = datetime.fromisoformat(departure_time)
+
+    if departure_time.tzinfo is None:
+        departure_time = departure_time.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    hours_left = (departure_time - now).total_seconds() / 3600
+
+    provider = await execute_query(
+        "SELECT cancellation_penalty FROM service_providers WHERE id = %s",
+        (reservation["transport_company_id"],),
+        fetch_one=True
+    )
+
+    if not provider:
+        raise HTTPException(status_code=404, detail="Service provider not found")
+
+    base_penalty = float(provider["cancellation_penalty"] or 0)
+
+    if hours_left < 1:
+        penalty_percent = base_penalty
+    elif hours_left < 12:
+        penalty_percent = base_penalty / 2
+    else:
+        penalty_percent = 0
+
+    return {
+        "penalty_percent": round(penalty_percent, 2),
+        "hours_until_departure": round(hours_left, 2),
+        "base_penalty_percent": base_penalty
+    }
 
 @router.post("/cancel/{reservation_id}/")
 async def user_cancel_reservation(
@@ -777,15 +793,48 @@ async def user_cancel_reservation(
     await connect_db()
 
     reservation = await execute_query(
-        "SELECT * FROM user_reservations WHERE id = %s AND user_id = %s",
+        """
+        SELECT ur.*, tt.departure_time, tt.transport_company_id
+        FROM user_reservations ur
+        JOIN travel_tickets tt ON ur.ticket_id = tt.id
+        WHERE ur.id = %s AND ur.user_id = %s
+        """,
         (reservation_id, user_id),
         fetch_one=True,
     )
+
     if not reservation:
         await close_db()
-        raise HTTPException(status_code=404, detail="Paid reservation not found or does not belong to user")
+        raise HTTPException(status_code=404, detail="Reservation not found or does not belong to user")
 
-    penalty_info = await check_cancellation_penalty(reservation_id)
+    departure_time = reservation["departure_time"]
+    if isinstance(departure_time, str):
+        departure_time = datetime.fromisoformat(departure_time)
+
+    if departure_time.tzinfo is None:
+        departure_time = departure_time.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    hours_left = (departure_time - now).total_seconds() / 3600
+
+    provider = await execute_query(
+        "SELECT cancellation_penalty FROM service_providers WHERE id = %s",
+        (reservation["transport_company_id"],),
+        fetch_one=True
+    )
+
+    if not provider:
+        await close_db()
+        raise HTTPException(status_code=404, detail="Service provider not found")
+
+    base_penalty = float(provider["cancellation_penalty"] or 0)
+
+    if hours_left < 1:
+        penalty_percent = base_penalty
+    elif hours_left < 12:
+        penalty_percent = base_penalty / 2
+    else:
+        penalty_percent = 0
 
     await execute_query(
         """
@@ -797,18 +846,22 @@ async def user_cancel_reservation(
     )
 
     await execute_query(
-        "UPDATE user_reservations SET status = 'canceled', refund_status = 'pending', updated_at = NOW() WHERE id = %s",
+        """
+        UPDATE user_reservations 
+        SET status = 'canceled', refund_status = 'pending', updated_at = NOW()
+        WHERE id = %s
+        """,
         (reservation_id,),
     )
 
     price_paid = float(reservation.get("price_paid") or 0)
-    penalty_percent = penalty_info.get("penalty_percent", 0)
     refund_amount = price_paid * (100 - penalty_percent) / 100
 
     if reservation["status"] == "paid":
         await execute_query(
             """
-            INSERT INTO refund_requests (user_id, payment_id, reason, status, refund_amount, request_date, created_at, updated_at)
+            INSERT INTO refund_requests 
+                (user_id, payment_id, reason, status, refund_amount, request_date, created_at, updated_at)
             VALUES (%s, %s, %s, 'pending', %s, NOW(), NOW(), NOW())
             """,
             (user_id, reservation["payment_id"], cancellation_reason, refund_amount),
@@ -818,6 +871,7 @@ async def user_cancel_reservation(
 
     return {
         "message": "Ticket canceled successfully and refund request submitted",
-        "refund_amount": refund_amount,
-        "penalty_percent": penalty_percent,
+        "refund_amount": round(refund_amount, 2),
+        "penalty_percent": round(penalty_percent, 2),
+        "hours_until_departure": round(hours_left, 2),
     }
