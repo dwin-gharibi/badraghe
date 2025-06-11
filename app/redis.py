@@ -9,6 +9,7 @@ async def get_redis() -> Redis:
         redis_client = Redis(
             host=settings.redis_host,
             port=settings.redis_port,
+            password=settings.redis_password,
             decode_responses=True,
         )
     return redis_client

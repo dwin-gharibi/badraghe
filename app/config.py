@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     redis_host: str = os.getenv("REDIS_HOST")
     redis_port: int = int(os.getenv("REDIS_PORT"))
+    redis_password: str = os.getenv("REDIS_PASSWORD")
     redis_db: int = int(os.getenv("REDIS_DB"))
 
     jwt_expiration_minutes: int = int(os.getenv("JWT_EXPIRATION_MINUTES", "60"))
