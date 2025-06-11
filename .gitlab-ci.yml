@@ -18,7 +18,7 @@ darkube_build_badraghe-lb_dngi2005-badraghe_hamravesh-c13:
   script:
   - IMAGE_ADDRESS="registry.hamdocker.ir/dngi2005/badraghe-lb"
   - 'darkube build --push -t $IMAGE_ADDRESS:$CI_COMMIT_SHORT_SHA -t $IMAGE_ADDRESS:$CI_COMMIT_REF_SLUG
-    --workdir openresty --file .Dockerfile --build-context . '
+    --workdir . --file ./openresty/Dockerfile --build-context . '
   stage: build
 darkube_deploy_badraghe-lb_dngi2005-badraghe_hamravesh-c13:
   image: hamravesh.hamdocker.ir/public/darkube-cli:v1.1
