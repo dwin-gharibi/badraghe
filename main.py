@@ -1,13 +1,22 @@
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from starlette.responses import RedirectResponse
+
 from app.db import connect_db, close_db, execute_query
 from app.config import settings
-from app.routes import auth, users, city, tickets, reservations, discounts, features, notifications, payments, reports, roles, service_providers, support, vehicles
+from app.routes import auth, users, city, tickets, reservations, discounts, features, notifications, payments, reports, roles, service_providers, support, vehicles, referrals, reviews
 from app.utils.security_util import verify_password, hash_password
 from app.utils.jwt_util import create_access_token
 from fastapi import APIRouter, Request, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn="https://1b98d8e0edde7e0273ed7ae280912869@sentry.hamravesh.com/8514",
+    traces_sample_rate=1.0,
+)
 
 tags_metadata = [
     {
@@ -130,6 +139,22 @@ tags_metadata = [
             "url": "https://hamgit.ir/dngi2005/badraghe/system-docs"
         }
     },
+    {
+        "name": "User Referrals",
+        "description": "Endpoints for managing user referrals, including creation, listing, counting, and deletion.",
+        "externalDocs": {
+            "description": "Referral API documentation",
+            "url": "https://hamgit.ir/dngi2005/badraghe/referrals-docs"
+        }
+    },
+    {
+        "name": "Ticket Reviews",
+        "description": "Endpoints for user reviews on travel tickets, including submission, updating, stats, and retrieval.",
+        "externalDocs": {
+            "description": "Reviews API documentation",
+            "url": "https://hamgit.ir/dngi2005/badraghe/reviews-docs"
+        }
+    }
 ]
 
 app = FastAPI(
@@ -172,9 +197,16 @@ app.include_router(reports.router, tags=["Reports"])
 app.include_router(roles.router, tags=["Roles"])
 app.include_router(service_providers.router, tags=["Service Providers"])
 
-@app.get("/", tags=["System"], summary="Health check and welcome message")
+app.include_router(reviews.router, tags=["Ticket Reviews"])
+app.include_router(referrals.router, tags=["User Referrals"])
+
+@app.get("/", tags=["System"])
 async def root():
-    return {"message": "Welcome to Badraghe"}
+    return RedirectResponse("/docs")
+
+@app.get("/health", tags=["System"], summary="Health check and welcome message")
+async def health_check():
+    return {"status": "healthy"}
 
 @app.post("/token", tags=["System"])
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
