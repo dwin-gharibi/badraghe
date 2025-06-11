@@ -12,5 +12,4 @@ passlib
 pydantic[email]
 python-multipart
 celery
-smtplib
 sentry-sdk[fastapi]
