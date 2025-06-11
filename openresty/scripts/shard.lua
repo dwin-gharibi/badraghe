@@ -40,10 +40,26 @@ local function get_start_index()
     return index
 end
 
+local function sanitize_headers(headers, backend_host)
+    local new_headers = {}
+    for k, v in pairs(headers) do
+        local lower_k = k:lower()
+        if lower_k ~= "host" and lower_k ~= "connection" and lower_k ~= "content-length" then
+            new_headers[k] = v
+        end
+    end
+    new_headers["Host"] = backend_host:gsub("^https?://", "")
+    return new_headers
+end
+
 local function proxy_with_fallback()
     local start_index = get_start_index()
     local total_nodes = #backend_nodes
     ngx.log(ngx.ERR, "[Proxy] Start index: ", start_index)
+
+    local req_method = ngx.req.get_method()
+    local body_data = ngx.req.get_body_data()
+    local req_headers = ngx.req.get_headers()
 
     for i = 0, total_nodes - 1 do
         local index = ((start_index + i - 1) % total_nodes) + 1
@@ -53,18 +69,22 @@ local function proxy_with_fallback()
         local client = http.new()
         client:set_timeout(5000)
 
-        local body_data = ngx.req.get_body_data()
+        local sanitized_headers = sanitize_headers(req_headers, node)
+        ngx.log(ngx.ERR, "[Proxy] Forwarding headers to ", node, ": ", require("cjson").encode(sanitized_headers))
+
         local res, err = client:request_uri(node .. ngx.var.request_uri, {
-            method = ngx.req.get_method(),
-            headers = ngx.req.get_headers(),
+            method = req_method,
+            headers = sanitized_headers,
             body = body_data,
             keepalive_timeout = 60,
             keepalive_pool = 10,
-            ssl_verify = false
+            ssl_verify = false,
+            version = 1.1
         })
 
         if res then
             ngx.log(ngx.ERR, "[Proxy] Response status from ", node, ": ", res.status)
+            ngx.log(ngx.ERR, "[Proxy] Response headers: ", require("cjson").encode(res.headers))
         else
             ngx.log(ngx.ERR, "[Proxy] Request error to ", node, ": ", err)
         end
@@ -72,7 +92,10 @@ local function proxy_with_fallback()
         if res and res.status < 500 then
             ngx.status = res.status
             for k, v in pairs(res.headers) do
-                ngx.header[k] = v
+                local lk = k:lower()
+                if lk ~= "transfer-encoding" and lk ~= "connection" then
+                    ngx.header[k] = v
+                end
             end
             ngx.say(res.body)
             ngx.log(ngx.ERR, "[Proxy] Successfully proxied request to ", node)
