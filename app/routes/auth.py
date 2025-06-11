@@ -7,7 +7,7 @@ from app.utils.security_util import hash_password
 import random
 import re
 from app.utils.sms_util import send_sms_ir_otp
-from app.utils.email_util import send_email
+from app.utils.email_util import send_otp_email
 router = APIRouter()
 
 class SignupRequest(BaseModel):
@@ -42,8 +42,8 @@ async def send_otp(data: OTPRequest):
     attempts = await redis.get(limit_key)
     attempts = int(attempts or 0)
 
-    if attempts >= 5:
-        raise HTTPException(status_code=429, detail="OTP limit reached. Try again in 1 hour.")
+    # if attempts >= 5:
+    #     raise HTTPException(status_code=429, detail="OTP limit reached. Try again in 1 hour.")
 
     otp = f"{random.randint(100000, 999999)}"
     await redis.set(f"otp:{recipient}", otp, ex=300)
@@ -51,21 +51,12 @@ async def send_otp(data: OTPRequest):
     await redis.expire(limit_key, 3600)
 
     if is_valid_iranian_number(recipient):
-        sms_ir_result = await send_sms_ir_otp(recipient, otp)
+        sms_ir_result = await send_sms_ir_otp(data.phone_or_email, otp)
         return {"msg": f"OTP sent to phone {otp}", "sms_ir_result": sms_ir_result}
 
     elif is_valid_email(recipient):
-        subject = "Your Verification Code"
-        body = f"""
-        Hello,
-
-        Your OTP code is: {otp}
-
-        This code is valid for 5 minutes.
-
-        Thank you.
-        """
-        send_email(recipient, subject, body)
+        subject = "Badraghe - Your Verification Code"
+        send_otp_email(recipient, subject, otp)
         return {"msg": f"OTP sent to email {recipient}"}
 
 @router.post("/verify-otp")

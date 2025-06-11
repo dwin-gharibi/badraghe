@@ -1,25 +1,43 @@
-import os
-import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from ssl import create_default_context
+from email.mime.text import MIMEText
+import smtplib
 from app.config import settings
 
-def send_email(to_address, subject, body):
+def send_otp_email(to_address, subject, otp):
+    html_body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 30px;">
+            <div style="max-width: 600px; margin: auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); padding: 20px;">
+                <div style="text-align: center;">
+                    <img src="https://api.badraghe.dwin.codes/static/logo.png" alt="Logo" width="120" style="margin-bottom: 20px;" />
+                    <h2 style="color: #333333;">Your Verification Code</h2>
+                </div>
+                <p style="font-size: 16px; color: #555555;">Hello,</p>
+                <p style="font-size: 16px; color: #555555;">
+                    Your OTP code is:
+                    <strong style="font-size: 20px; color: #000000;">{otp}</strong>
+                </p>
+                <p style="font-size: 14px; color: #999999;">This code is valid for 5 minutes.</p>
+                <br>
+                <p style="font-size: 14px; color: #555555;">Thank you,<br>Badraghe</p>
+            </div>
+        </body>
+    </html>
+    """
+
+    msg = MIMEMultipart()
+    msg['From'] = settings.mail_from_address
+    msg['To'] = to_address
+    msg['Subject'] = subject
+    msg.attach(MIMEText(html_body, 'html'))
+
     try:
-        context = create_default_context()
-
-        with smtplib.SMTP_SSL(settings.mail_host, settings.mail_port, context=context) as server:
-            server.login(settings.mail_user, settings.mail_password)
-
-            msg = MIMEMultipart()
-            msg['From'] = f"{settings.mail_form_name} <{settings.mail_from_address}>"
-            msg['To'] = to_address
-            msg['Subject'] = subject
-            msg.add_header('x-liara-tag', 'test-tag')
-            msg.attach(MIMEText(body, 'plain'))
-
-            server.sendmail(settings.mail_from_address, to_address, msg.as_string())
-            print("Email sent successfully!")
+        server = smtplib.SMTP(settings.mail_host, settings.mail_port)
+        server.starttls()
+        server.login(settings.mail_user, settings.mail_password)
+        server.send_message(msg)
+        print("Email sent successfully")
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        print("Failed to send email:", e)
+    finally:
+        server.quit()
