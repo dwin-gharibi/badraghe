@@ -20,7 +20,6 @@ class PaymentStatusUpdate(BaseModel):
 
 class RefundAction(BaseModel):
     action: str
-    note: Optional[str] = None
 
 class PaymentUpdate(BaseModel):
     amount: Optional[float] = None
@@ -35,6 +34,70 @@ class FullPaymentUpdate(BaseModel):
     payment_method_id: int
     status: str
     transaction_id: str
+
+@router.get("/refunds", response_model=List[dict])
+async def list_refund_requests(current_user: dict = Depends(get_current_user)):
+    await connect_db()
+    refunds = await execute_query(
+        """
+        SELECT rr.id, rr.reason, rr.status, rr.refund_amount,
+               rr.created_at, p.id as payment_id
+        FROM refund_requests rr
+        JOIN payments p ON rr.payment_id = p.id
+        WHERE rr.user_id = %s
+        ORDER BY rr.created_at DESC
+        """,
+        (current_user["user_id"],),
+        fetch_all=True
+    )
+    await close_db()
+    return refunds
+
+@router.post("/refunds/{refund_id}/action", dependencies=[Depends(require_roles("admin"))])
+async def handle_refund(refund_id: int, action_data: RefundAction):
+    await connect_db()
+
+    if action_data.action not in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="Invalid action")
+
+    status = "approved" if action_data.action == "approved" else "rejected"
+
+    refund = await execute_query(
+        """
+        SELECT user_id, refund_amount FROM refund_requests
+        WHERE id = %s
+        """,
+        (refund_id,),
+        fetch_one=True
+    )
+
+    if not refund:
+        raise HTTPException(status_code=404, detail="Refund request not found")
+
+    await execute_query(
+        """
+        UPDATE refund_requests
+        SET status = %s, updated_at = NOW(), processed_at = NOW()
+        WHERE id = %s
+        """,
+        (status, refund_id),
+        commit=True
+    )
+
+    if status == "approved":
+        await execute_query(
+            """
+            UPDATE users
+            SET balance = balance + %s
+            WHERE id = %s
+            """,
+            (refund["refund_amount"], refund["user_id"]),
+            commit=True
+        )
+
+    await close_db()
+
+    return {"message": f"Refund request {status}"}
 
 @router.get("/methods", response_model=List[dict])
 async def get_payment_methods():
@@ -89,8 +152,8 @@ async def create_payment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid payment method"
         )
-    
-    if abs(float(reservation["price_paid"]) - float(payment.amount)) > 0.01:
+    print(abs(float(reservation["price_paid"]) - float(payment.amount)))
+    if abs(float(reservation["price_paid"]) - float(payment.amount)) < 0.0001:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Payment amount doesn't match reservation total"
@@ -121,16 +184,16 @@ async def create_payment(
         await execute_query(
             """
             UPDATE user_reservations 
-            SET status = 'paid', payment_id = %s 
+            SET status = 'paid', payment_id = %s, price_paid = %s
             WHERE id = %s
             """,
-            (payment_id["id"], payment.reservation_id),
+            (payment_id, payment.reservation_id, payment.amount),
             commit=True
         )
 
         await close_db()
         return {
-            "payment_id": payment_id["id"],
+            "payment_id": payment_id,
             "transaction_id": transaction_id,
             "status": "successful"
         }
@@ -224,7 +287,7 @@ async def request_refund(
             return_lastrowid=True
         )
         await close_db()
-        return {"refund_id": refund_id["id"], "status": "pending"}
+        return {"refund_id": refund_id, "status": "pending"}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -292,7 +355,7 @@ async def verify_payment(
         )
         raise HTTPException(status_code=400, detail="Payment verification failed")
     
-@router.get("/{payment_id}", response_model=dict)
+@router.get("/{payment_id}")
 async def get_payment_by_id(payment_id: int, current_user: dict = Depends(get_current_user)):
     await connect_db()
     payment = await execute_query(
@@ -304,10 +367,10 @@ async def get_payment_by_id(payment_id: int, current_user: dict = Depends(get_cu
         FROM payments p
         JOIN payment_methods pm ON p.payment_method_id = pm.id
         JOIN user_reservations r ON p.reservation_id = r.id
-        WHERE p.id = %s AND p.user_id = %s
+        WHERE p.id = %s
         """,
-        (payment_id, current_user["user_id"]),
-        fetch_one=True
+        (payment_id),
+        fetch_one=True,
     )
 
     if not payment:
@@ -316,7 +379,7 @@ async def get_payment_by_id(payment_id: int, current_user: dict = Depends(get_cu
     await close_db()
     return payment
 
-@router.put("/{payment_id}/status", dependencies=[Depends(require_roles(["admin"]))])
+@router.put("/{payment_id}/status", dependencies=[Depends(require_roles("admin"))])
 async def update_payment_status(payment_id: int, status_update: PaymentStatusUpdate):
     await connect_db()
     if status_update.status not in ["pending", "successful", "failed", "refunded"]:
@@ -330,54 +393,14 @@ async def update_payment_status(payment_id: int, status_update: PaymentStatusUpd
     await close_db()
     return {"message": "Payment status updated successfully"}
 
-@router.get("/refunds", response_model=List[dict])
-async def list_refund_requests(current_user: dict = Depends(get_current_user)):
-    await connect_db()
-    refunds = await execute_query(
-        """
-        SELECT rr.id, rr.reason, rr.status, rr.refund_amount,
-               rr.created_at, p.id as payment_id
-        FROM refund_requests rr
-        JOIN payments p ON rr.payment_id = p.id
-        WHERE rr.user_id = %s
-        ORDER BY rr.created_at DESC
-        """,
-        (current_user["user_id"],),
-        fetch_all=True
-    )
-    await close_db()
-    return refunds
-
-@router.post("/refunds/{refund_id}/action", dependencies=[Depends(require_roles(["admin"]))])
-async def handle_refund(refund_id: int, action_data: RefundAction):
-    await connect_db()
-
-    if action_data.action not in ["approve", "reject"]:
-        raise HTTPException(status_code=400, detail="Invalid action")
-
-    status = "approved" if action_data.action == "approve" else "rejected"
-
-    await execute_query(
-        """
-        UPDATE refund_requests
-        SET status = %s, admin_note = %s, updated_at = NOW()
-        WHERE id = %s
-        """,
-        (status, action_data.note, refund_id),
-        commit=True
-    )
-    await close_db()
-
-    return {"message": f"Refund request {status}"}
-
-@router.get("/", dependencies=[Depends(require_roles(["admin"]))], response_model=List[dict])
+@router.get("/", dependencies=[Depends(require_roles("admin"))], response_model=List[dict])
 async def get_all_payments(skip: int = 0, limit: int = 100):
     await connect_db()
     payments = await execute_query(
         """
         SELECT p.id, p.amount, p.currency, p.status,
                p.transaction_id, p.payment_date,
-               u.username, r.id as reservation_id
+               u.email, r.id as reservation_id
         FROM payments p
         JOIN users u ON p.user_id = u.id
         JOIN user_reservations r ON p.reservation_id = r.id
@@ -391,7 +414,7 @@ async def get_all_payments(skip: int = 0, limit: int = 100):
     await close_db()
     return payments
 
-@router.patch("/{payment_id}", dependencies=[Depends(require_roles(["admin"]))])
+@router.patch("/{payment_id}", dependencies=[Depends(require_roles("admin"))])
 async def patch_payment(payment_id: int, update_data: PaymentUpdate):
     
     await connect_db()
@@ -417,27 +440,7 @@ async def patch_payment(payment_id: int, update_data: PaymentUpdate):
 
     return {"message": "Payment updated successfully"}
 
-@router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def soft_delete_payment(payment_id: int, current_user: dict = Depends(get_current_user)):
-    await connect_db()
-    payment = await execute_query(
-        "SELECT user_id FROM payments WHERE id = %s", (payment_id,), fetch_one=True
-    )
-
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
-
-    if payment["user_id"] != current_user["user_id"] and "admin" not in current_user.get("roles", []):
-        raise HTTPException(status_code=403, detail="Not authorized to delete this payment")
-
-    await execute_query(
-        "UPDATE payments SET status = 'deleted', updated_at = NOW() WHERE id = %s",
-        (payment_id,),
-        commit=True
-    )
-    await close_db()
-
-@router.put("/{payment_id}", dependencies=[Depends(require_roles(["admin"]))])
+@router.put("/{payment_id}", dependencies=[Depends(require_roles("admin"))])
 async def replace_payment(payment_id: int, data: FullPaymentUpdate):
     await connect_db()
     await execute_query(
