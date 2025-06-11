@@ -42,7 +42,7 @@ async def create_feature(
             return_lastrowid=True
         )
         await close_db()
-        return {"feature_id": feature_id["id"]}
+        return {"feature_id": feature_id}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -92,7 +92,7 @@ async def assign_feature_to_train(
             detail=str(e)
         )
 
-@router.post("/assign-to-plane", status_code=status.HTTP_200_OK)
+@router.post("/assign-to-flight", status_code=status.HTTP_200_OK)
 async def assign_feature_to_train(
     train_id: int,
     feature_id: int,
@@ -100,14 +100,14 @@ async def assign_feature_to_train(
 ):
     await connect_db()
     train = await execute_query(
-        "SELECT 1 FROM plane_details WHERE id = %s",
+        "SELECT 1 FROM flight_details WHERE id = %s",
         (train_id,),
         fetch_one=True
     )
     if not train:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Plain not found"
+            detail="Flight not found"
         )
     
     feature = await execute_query(
@@ -123,12 +123,12 @@ async def assign_feature_to_train(
     
     try:
         await execute_query(
-            "INSERT IGNORE INTO plane_features (plain_id, feature_id) VALUES (%s, %s)",
+            "INSERT IGNORE INTO flight_features (flight_id, feature_id) VALUES (%s, %s)",
             (train_id, feature_id),
             commit=True
         )
         await close_db()
-        return {"message": "Feature assigned to plain"}
+        return {"message": "Feature assigned to fligt"}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
