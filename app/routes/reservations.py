@@ -17,7 +17,7 @@ RESERVATION_EXPIRY_MINUTES = 10
 ZARINPAL_MERCHANT_ID = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 ZARINPAL_API = "https://sandbox.zarinpal.com/pg/v4/payment/request.json"
 ZARINPAL_VERIFY_API = "https://sandbox.zarinpal.com/pg/v4/payment/verify.json"
-CALLBACK_URL = "https://dwin.codes/payments/verify"
+CALLBACK_URL = "https://api1.badraghe.dwin.codes/payments/verify"
 
 class ReservationStatus(str, Enum):
     TEMPORARY = "temporary"
