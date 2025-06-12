@@ -42,8 +42,8 @@ async def send_otp(data: OTPRequest):
     attempts = await redis.get(limit_key)
     attempts = int(attempts or 0)
 
-    # if attempts >= 5:
-    #     raise HTTPException(status_code=429, detail="OTP limit reached. Try again in 1 hour.")
+    if attempts >= 5:
+        raise HTTPException(status_code=429, detail="OTP limit reached. Try again in 1 hour.")
 
     otp = f"{random.randint(100000, 999999)}"
     await redis.set(f"otp:{recipient}", otp, ex=300)
