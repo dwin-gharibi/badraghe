@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     mail_from_address: str = os.getenv("MAIL_FROM_ADDRESS", "")
     mail_form_name: str = os.getenv("MAIL_FROM_NAME", "")
 
+    liara_base_url: str = os.getenv("LIARA_BASE_URL", "")
+    liara_api_key: str = os.getenv("LIARA_API_KEY", "")
+    liara_model_name: str = os.getenv("LIARA_MODEL_NAME", "")
+
     redis_host: str = os.getenv("REDIS_HOST", "")
     redis_port: int = int(os.getenv("REDIS_PORT", "30709"))
     redis_password: str = os.getenv("REDIS_PASSWORD", "")

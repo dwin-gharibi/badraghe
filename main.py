@@ -3,13 +3,14 @@ from starlette.responses import RedirectResponse
 
 from app.db import connect_db, close_db, execute_query
 from app.config import settings
-from app.routes import auth, users, city, tickets, reservations, discounts, features, notifications, payments, reports, roles, service_providers, support, vehicles, referrals, reviews
+from app.routes import auth, users, city, tickets, reservations, discounts, features, notifications, payments, reports, roles, service_providers, support, vehicles, referrals, reviews, ai
 from app.utils.security_util import verify_password, hash_password
 from app.utils.jwt_util import create_access_token
 from fastapi import APIRouter, Request, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 import sentry_sdk
 
@@ -174,6 +175,7 @@ app = FastAPI(
     }
 )
 
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -181,6 +183,8 @@ async def favicon():
     return FileResponse("static/favicon.ico")
 
 app.include_router(auth.router, tags=["Auth"])
+
+app.include_router(ai.router, tags=["AI Services"])
 app.include_router(users.router, tags=["Users"])
 app.include_router(city.router, tags=["Cities"])
 app.include_router(tickets.router, tags=["Tickets"])
@@ -200,6 +204,15 @@ app.include_router(service_providers.router, tags=["Service Providers"])
 
 app.include_router(reviews.router, tags=["Ticket Reviews"])
 app.include_router(referrals.router, tags=["User Referrals"])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/", tags=["System"])
 async def root():
