@@ -28,9 +28,13 @@ class Settings(BaseSettings):
     redis_password: str = os.getenv("REDIS_PASSWORD", "")
     redis_db: int = int(os.getenv("REDIS_DB", "0"))
 
-    jwt_expiration_minutes: int = int(os.getenv("JWT_EXPIRATION_MINUTES", "60"))
+    jwt_expiration_minutes: int = int(os.getenv("JWT_EXPIRATION_MINUTES", "3600"))
     jwt_secret: str = os.getenv("JWT_SECTET", "")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "")
+
+    elasticsearch_url: str = os.getenv("ELASTICSEARCH_URL", "http://localhost:7970")
+    elasticsearch_user: str = os.getenv("ELASTICSEARCH_USER", "elastic")
+    elasticsearch_password: str = os.getenv("ELASTICSEARCH_PASSWORD", "password")
 
     sms_ir_api_key: str = os.getenv("SMS_IR_API_KEY", "")
     sms_ir_line_number: str = os.getenv("SMS_IR_LINE_NUMBER", "")

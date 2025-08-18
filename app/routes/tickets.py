@@ -1,4 +1,4 @@
-from fastapi import Query, APIRouter, Path, HTTPException, status, Depends, Header
+from fastapi import Query, APIRouter, Path, HTTPException, status, Depends
 from typing import Optional, List, Dict
 from pydantic import BaseModel
 from enum import Enum
@@ -7,12 +7,11 @@ from app.db import execute_query, connect_db, close_db
 from app.redis import get_redis
 from app.utils.cache_util import get_cache, set_cache, delete_cache
 from app.utils.auth_util import get_current_user, require_roles
+from app.utils.elastic_util import index_ticket, delete_ticket_index, search_tickets_es
 import json
 import hashlib
-import httpx
 
 router = APIRouter(prefix="/tickets")
-
 CACHE_TTL = 300
 
 class TransportType(str, Enum):
@@ -114,16 +113,14 @@ async def get_ticket_with_details(ticket_id: int) -> Optional[dict]:
         (ticket_id,),
         fetch_one=True
     )
-    
     if not ticket:
         return None
-    
     details = None
     features = []
     if ticket["transport_type"] == "plane":
         details = await execute_query(
-            "SELECT * FROM flight_details WHERE ticket_id = %s", 
-            (ticket_id,), 
+            "SELECT * FROM flight_details WHERE ticket_id = %s",
+            (ticket_id,),
             fetch_one=True
         )
         if details:
@@ -138,8 +135,8 @@ async def get_ticket_with_details(ticket_id: int) -> Optional[dict]:
             )
     elif ticket["transport_type"] == "train":
         details = await execute_query(
-            "SELECT * FROM train_details WHERE ticket_id = %s", 
-            (ticket_id,), 
+            "SELECT * FROM train_details WHERE ticket_id = %s",
+            (ticket_id,),
             fetch_one=True
         )
         if details:
@@ -154,8 +151,8 @@ async def get_ticket_with_details(ticket_id: int) -> Optional[dict]:
             )
     elif ticket["transport_type"] == "bus":
         details = await execute_query(
-            "SELECT * FROM bus_details WHERE ticket_id = %s", 
-            (ticket_id,), 
+            "SELECT * FROM bus_details WHERE ticket_id = %s",
+            (ticket_id,),
             fetch_one=True
         )
         if details:
@@ -168,37 +165,26 @@ async def get_ticket_with_details(ticket_id: int) -> Optional[dict]:
                 (details["id"],),
                 fetch_all=True
             )
-    
     ticket["features"] = [f["name"] for f in features] if features else []
     ticket["details"] = details
-    
     await close_db()
     return ticket
 
-
-
 @router.get("/search", response_model=List[TicketResponse])
 async def search_tickets(
-    departure_city: Optional[str] = Query(None),
-    arrival_city: Optional[str] = Query(None),
-    travel_date: Optional[str] = Query(None),
-    transport_type: Optional[TransportType] = Query(None),
-    price_min: Optional[float] = Query(None, ge=0),
-    price_max: Optional[float] = Query(None, ge=0),
-    company_name: Optional[str] = Query(None),
-    departure_time: Optional[str] = Query(None),
-    class_type: Optional[TicketClass] = Query(None),
+    departure_city: Optional[str] = None,
+    arrival_city: Optional[str] = None,
+    travel_date: Optional[str] = None,
+    transport_type: Optional[TransportType] = None,
+    price_min: Optional[float] = None,
+    price_max: Optional[float] = None,
+    company_name: Optional[str] = None,
+    departure_time: Optional[str] = None,
+    class_type: Optional[TicketClass] = None,
+    status: Optional[TicketStatus] = TicketStatus.AVAILABLE,
     skip: int = 0,
-    limit: int = 100,
-    current_user: dict = Depends(get_current_user)
-):
-    if not any([departure_city, arrival_city, travel_date, transport_type, 
-               price_min, price_max, company_name, departure_time, class_type]):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least one query parameter must be provided."
-        )
-    await connect_db()
+    limit: int = 100
+) -> List[dict]:
     redis = await get_redis()
     cache_params = {
         "departure_city": departure_city,
@@ -210,95 +196,85 @@ async def search_tickets(
         "company_name": company_name,
         "departure_time": departure_time,
         "class_type": class_type.value if class_type else None,
+        "status": status.value if status else None,
         "skip": skip,
         "limit": limit
     }
     cache_key = await generate_cache_key(cache_params)
-    
     cached = await get_cache(cache_key)
     if cached:
         return json.loads(cached)
+    try:
+        tickets, total = await search_tickets_es(cache_params)
+        await set_cache(cache_key, json.dumps(tickets, default=str), expire_seconds=300)
+        return tickets
+    except Exception as e:
+        await connect_db()
+        query = """
+            SELECT tt.*, sp.name AS company_name
+            FROM travel_tickets tt
+            LEFT JOIN service_providers sp ON tt.transport_company_id = sp.id
+            WHERE 1=1
+        """
+        params = []
+        if status:
+            query += " AND tt.status = %s"
+            params.append(status.value)
+        if departure_city:
+            query += " AND tt.departure_city = %s"
+            params.append(departure_city)
+        if arrival_city:
+            query += " AND tt.arrival_city = %s"
+            params.append(arrival_city)
+        if travel_date:
+            query += " AND DATE(tt.departure_time) = %s"
+            params.append(travel_date)
+        if transport_type:
+            query += " AND tt.transport_type = %s"
+            params.append(transport_type.value)
+        if price_min is not None:
+            query += " AND tt.price >= %s"
+            params.append(price_min)
+        if price_max is not None:
+            query += " AND tt.price <= %s"
+            params.append(price_max)
+        if company_name:
+            query += " AND sp.name = %s"
+            params.append(company_name)
+        if departure_time:
+            query += " AND TIME(tt.departure_time) >= %s"
+            params.append(departure_time)
+        if class_type:
+            query += " AND tt.class_type = %s"
+            params.append(class_type.value)
+        query += " ORDER BY tt.departure_time ASC LIMIT %s OFFSET %s"
+        params.extend([limit, skip])
+        tickets = await execute_query(query, tuple(params), fetch_all=True)
+        detailed_tickets = []
+        for ticket in tickets:
+            ticket_details = await get_ticket_with_details(ticket["id"])
+            if ticket_details:
+                detailed_tickets.append(ticket_details)
+        await set_cache(cache_key, json.dumps(detailed_tickets, default=str), expire_seconds=300)
+        await close_db()
+        return detailed_tickets
     
-    query = """
-    SELECT tt.*, sp.name AS company_name
-    FROM travel_tickets tt
-    LEFT JOIN service_providers sp ON tt.transport_company_id = sp.id
-    WHERE tt.status = 'available'
-    """
-    params = []
-    
-    if departure_city:
-        query += " AND tt.departure_city = %s"
-        params.append(departure_city)
-    
-    if arrival_city:
-        query += " AND tt.arrival_city = %s"
-        params.append(arrival_city)
-    
-    if travel_date:
-        query += " AND DATE(tt.departure_time) = %s"
-        params.append(travel_date)
-    
-    if transport_type:
-        query += " AND tt.transport_type = %s"
-        params.append(transport_type.value)
-    
-    if price_min is not None:
-        query += " AND tt.price >= %s"
-        params.append(price_min)
-    
-    if price_max is not None:
-        query += " AND tt.price <= %s"
-        params.append(price_max)
-    
-    if company_name:
-        query += " AND sp.name = %s"
-        params.append(company_name)
-    
-    if departure_time:
-        query += " AND TIME(tt.departure_time) >= %s"
-        params.append(departure_time)
-    
-    if class_type:
-        query += " AND tt.class_type = %s"
-        params.append(class_type.value)
-    
-    query += " ORDER BY tt.departure_time ASC LIMIT %s OFFSET %s"
-    params.extend([limit, skip])
-    
-    tickets = await execute_query(query, tuple(params), fetch_all=True)
-    
-    detailed_tickets = []
-    print(tickets)
-    for ticket in tickets:
-        ticket_details = await get_ticket_with_details(ticket["id"])
-        if ticket_details:
-            detailed_tickets.append(ticket_details)
-    
-    await set_cache(cache_key, json.dumps(detailed_tickets, default=str), expire_seconds=CACHE_TTL)
-
-    return detailed_tickets
-
-
-
 @router.get("/stats", response_model=TicketStatsResponse)
 async def get_ticket_stats(
     transport_type: Optional[TransportType] = None,
     class_type: Optional[TicketClass] = None,
-    current_user: dict = Depends(require_roles("admin", "ticket_manager"))
 ):
-    await connect_db()
     where_clause = "WHERE 1=1"
     params = []
-    
+
     if transport_type:
         where_clause += " AND transport_type = %s"
         params.append(transport_type.value)
-    
     if class_type:
         where_clause += " AND class_type = %s"
         params.append(class_type.value)
-    
+
+    await connect_db()
     status_counts = await execute_query(
         f"""
         SELECT status, COUNT(*) as count
@@ -309,7 +285,7 @@ async def get_ticket_stats(
         params,
         fetch_all=True
     )
-    
+    await connect_db()
     transport_counts = await execute_query(
         f"""
         SELECT transport_type, COUNT(*) as count
@@ -319,7 +295,7 @@ async def get_ticket_stats(
         """,
         fetch_all=True
     )
-    
+    await connect_db()
     class_counts = await execute_query(
         f"""
         SELECT class_type, COUNT(*) as count
@@ -329,7 +305,6 @@ async def get_ticket_stats(
         """,
         fetch_all=True
     )
-    
     stats = {
         "total_tickets": 0,
         "available": 0,
@@ -338,20 +313,15 @@ async def get_ticket_stats(
         "by_transport_type": {},
         "by_class": {}
     }
-    
     for row in status_counts:
         stats["total_tickets"] += row["count"]
         stats[row["status"]] = row["count"]
-    
     for row in transport_counts:
         stats["by_transport_type"][row["transport_type"]] = row["count"]
-    
     for row in class_counts:
         stats["by_class"][row["class_type"]] = row["count"]
-    
-    await close_db()
-    
     return stats
+
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=TicketResponse)
 async def create_ticket(
@@ -370,13 +340,11 @@ async def create_ticket(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Transport company not found"
             )
-    
     if ticket.total_seats <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Total seats must be greater than 0"
         )
-    
     try:
         ticket_id = await execute_query(
             """
@@ -404,29 +372,27 @@ async def create_ticket(
             fetch_one=True,
             return_lastrowid=True
         )
+        ticket_details = await get_ticket_with_details(ticket_id)
+        await index_ticket(ticket_details)
         await close_db()
-        return await get_ticket_with_details(ticket_id)
+        return ticket_details
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
+    
 @router.get("/{ticket_id}", response_model=TicketResponse)
 async def get_ticket(
     ticket_id: int = Path(..., title="The ID of the ticket to get"),
     current_user: dict = Depends(get_current_user)
 ):
-    await connect_db()
     ticket = await get_ticket_with_details(ticket_id)
-    
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ticket not found"
         )
-    
-    await close_db()
     return ticket
 
 @router.head("/{ticket_id}")
@@ -440,15 +406,14 @@ async def check_ticket_exists(
         (ticket_id,),
         fetch_one=True
     )
-    
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ticket not found"
         )
-    
     await close_db()
     return {}
+
 
 @router.put("/{ticket_id}", response_model=TicketResponse)
 async def update_ticket(
@@ -467,26 +432,20 @@ async def update_ticket(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ticket not found"
         )
-    
     set_clause = []
     params = []
-    
     if update.departure_city:
         set_clause.append("departure_city = %s")
         params.append(update.departure_city)
-    
     if update.arrival_city:
         set_clause.append("arrival_city = %s")
         params.append(update.arrival_city)
-    
     if update.departure_time:
         set_clause.append("departure_time = %s")
         params.append(update.departure_time)
-    
     if update.arrival_time:
         set_clause.append("arrival_time = %s")
         params.append(update.arrival_time)
-    
     if update.price is not None:
         if update.price < 0:
             raise HTTPException(
@@ -495,7 +454,6 @@ async def update_ticket(
             )
         set_clause.append("price = %s")
         params.append(update.price)
-    
     if update.available_seats is not None:
         if update.available_seats < 0 or update.available_seats > ticket["total_seats"]:
             raise HTTPException(
@@ -504,41 +462,36 @@ async def update_ticket(
             )
         set_clause.append("available_seats = %s")
         params.append(update.available_seats)
-    
     if update.status:
         set_clause.append("status = %s")
         params.append(update.status.value)
-    
     if update.class_type:
         set_clause.append("class_type = %s")
         params.append(update.class_type.value)
-    
     if not set_clause:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No fields to update"
         )
-    
     params.append(ticket_id)
-    
     try:
         await execute_query(
             f"UPDATE travel_tickets SET {', '.join(set_clause)} WHERE id = %s",
             params,
             commit=True
         )
-        
         redis = await get_redis()
         await redis.delete(f"ticket:{ticket_id}")
-        
+        ticket_details = await get_ticket_with_details(ticket_id)
+        await index_ticket(ticket_details)
         await close_db()
-        return await get_ticket_with_details(ticket_id)
+        return ticket_details
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
+    
 @router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ticket(
     ticket_id: int,
@@ -555,7 +508,6 @@ async def delete_ticket(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ticket not found"
         )
-    
     active_reservations = await execute_query(
         "SELECT 1 FROM user_reservations WHERE ticket_id = %s AND status IN ('temporary', 'reserved', 'paid')",
         (ticket_id,),
@@ -566,7 +518,6 @@ async def delete_ticket(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete ticket with active reservations"
         )
-    
     try:
         if ticket["transport_type"] == "plane":
             await execute_query(
@@ -601,18 +552,16 @@ async def delete_ticket(
                 (ticket_id,),
                 commit=True
             )
-        
         await execute_query(
             "DELETE FROM travel_tickets WHERE id = %s",
             (ticket_id,),
             commit=True
         )
-        
         redis = await get_redis()
         await redis.delete(f"ticket:{ticket_id}")
         await redis.delete("tickets:*")
+        await delete_ticket_index(ticket_id)
         await close_db()
-
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -898,3 +847,13 @@ async def add_flight_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+async def check_ticket_exists(ticket_id: int, current_user: dict = Depends(get_current_user)) -> bool:
+    await connect_db()
+    ticket = await execute_query(
+        "SELECT 1 FROM travel_tickets WHERE id = %s AND status = 'available'",
+        (ticket_id,),
+        fetch_one=True
+    )
+    await close_db()
+    return bool(ticket)

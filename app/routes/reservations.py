@@ -69,8 +69,8 @@ async def get_reservation_stats(
         transport_type: Optional[TransportType] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        current_user: dict = Depends(require_roles("admin"))
 ):
+    await connect_db()
     where_clause = "WHERE 1=1"
     params = []
 
@@ -97,7 +97,7 @@ async def get_reservation_stats(
         params,
         fetch_all=True
     )
-
+    await connect_db()
     transport_counts = await execute_query(
         f"""
         SELECT t.transport_type, COUNT(*) as count

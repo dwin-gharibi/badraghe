@@ -97,7 +97,6 @@ async def _verify_ticket(ticket_id: int, transport_type: str):
 @router.post("/flight-details", status_code=status.HTTP_201_CREATED)
 async def create_flight_details(
     detail: FlightDetailCreate,
-    current_user: dict = Depends(require_roles("admin", "provider"))
 ):
     await _verify_ticket(detail.ticket_id, "plane")
     await connect_db()
@@ -129,7 +128,6 @@ async def create_flight_details(
 @router.get("/flight-details/{ticket_id}", response_model=Dict[str, Any])
 async def get_flight_details(
     ticket_id: int,
-    current_user: dict = Depends(get_current_user)
 ):
     await _verify_ticket(ticket_id, "plane")
     await connect_db()
@@ -218,7 +216,6 @@ async def update_flight_details(
 @router.post("/train-details", status_code=status.HTTP_201_CREATED)
 async def create_train_details(
     detail: TrainDetailCreate,
-    current_user: dict = Depends(require_roles("admin", "provider"))
 ):
     await _verify_ticket(detail.ticket_id, "train")
     await connect_db()
@@ -248,7 +245,6 @@ async def create_train_details(
 @router.get("/train-details/{ticket_id}", response_model=Dict[str, Any])
 async def get_train_details(
     ticket_id: int,
-    current_user: dict = Depends(get_current_user)
 ):
     await _verify_ticket(ticket_id, "train")
     await connect_db()
@@ -320,7 +316,6 @@ async def update_train_details(
 @router.post("/bus-details", status_code=status.HTTP_201_CREATED)
 async def create_bus_details(
     detail: BusDetailCreate,
-    current_user: dict = Depends(require_roles("admin", "provider"))
 ):
     await _verify_ticket(detail.ticket_id, "bus")
     await connect_db()
@@ -352,7 +347,6 @@ async def create_bus_details(
 @router.get("/bus-details/{ticket_id}", response_model=Dict[str, Any])
 async def get_bus_details(
     ticket_id: int,
-    current_user: dict = Depends(get_current_user)
 ):
     await _verify_ticket(ticket_id, "bus")
     await connect_db()
@@ -429,7 +423,6 @@ async def update_bus_details(
 @router.post("/features", status_code=status.HTTP_201_CREATED)
 async def create_feature(
     feature: FeatureCreate,
-    current_user: dict = Depends(require_roles("admin", "provider"))
 ):
     try:
         await connect_db()
@@ -455,7 +448,6 @@ async def get_all_features(
     search: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
-    current_user: dict = Depends(get_current_user)
 ):
     await connect_db()
     query = "SELECT id, name, description FROM features"
@@ -605,7 +597,6 @@ async def get_flight_statistics(
     airline: Optional[str] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
-    current_user: dict = Depends(require_roles("admin", "analyst"))
 ):
     await connect_db()
     query = """
@@ -642,7 +633,6 @@ async def get_flight_statistics(
 async def get_train_statistics(
     min_rating: Optional[int] = None,
     max_rating: Optional[int] = None,
-    current_user: dict = Depends(require_roles("admin", "analyst"))
 ):
     await connect_db()
     query = """
@@ -674,7 +664,6 @@ async def get_train_statistics(
 @router.get("/statistics/buses", response_model=Dict[str, Any])
 async def get_bus_statistics(
     bus_type: Optional[str] = None,
-    current_user: dict = Depends(require_roles("admin", "analyst"))
 ):
     await connect_db()
     query = """

@@ -103,8 +103,8 @@ async def get_all_reports(
 @router.get("/stats", response_model=ReportStatsResponse)
 async def get_report_stats(
         time_range: Optional[str] = Query(None, description="Time range: today, week, month, year"),
-        current_user: dict = Depends(require_roles("admin"))
 ):
+    await connect_db()
     base_query = "SELECT COUNT(*) as count, status FROM reports"
     time_conditions = {
         "today": "DATE(created_at) = CURRENT_DATE",
@@ -114,12 +114,13 @@ async def get_report_stats(
     }
 
     where_clause = f" WHERE {time_conditions[time_range]}" if time_range else ""
-
+    
+    await connect_db()
     status_counts = await execute_query(
         f"{base_query}{where_clause} GROUP BY status",
         fetch_all=True
     )
-
+    await connect_db()
     category_counts = await execute_query(
         f"SELECT category, COUNT(*) as count FROM reports{where_clause} GROUP BY category",
         fetch_all=True

@@ -1,3 +1,6 @@
+import dotenv
+dotenv.load_dotenv()
+
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from starlette.responses import RedirectResponse
 
@@ -11,14 +14,24 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+import logging
+import sys
 
-import sentry_sdk
-
-sentry_sdk.init(
-    dsn="https://1b98d8e0edde7e0273ed7ae280912869@sentry.hamravesh.com/8514",
-    traces_sample_rate=1.0,
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(levelname)s %(asctime)s %(name)s:%(lineno)d - %(message)s",
+    stream=sys.stdout,
 )
 
+logger = logging.getLogger(__name__)
+logger.debug("Custom logger initialized")
+
+# import sentry_sdk
+
+# sentry_sdk.init(
+#     dsn="https://1b98d8e0edde7e0273ed7ae280912869@sentry.hamravesh.com/8514",
+#     traces_sample_rate=1.0,
+# )
 
 tags_metadata = [
     {
@@ -161,6 +174,7 @@ tags_metadata = [
 
 app = FastAPI(
     title="Badraghe API",
+    debug=True,
     description="A modern travel reservation platform API, supporting ticket booking, user management, and payment processing.",
     version="1.0.0",
     openapi_tags=tags_metadata,

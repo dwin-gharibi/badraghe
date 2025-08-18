@@ -573,26 +573,24 @@ async def get_ticket_messages(
 @router.get("/stats", response_model=TicketStatsResponse)
 async def get_support_stats(
     time_range: Optional[str] = Query(None, description="Time range: today, week, month, year"),
-    current_user: dict = Depends(require_roles("admin", "support_agent"))
 ):
+    
     await connect_db()
     time_conditions = {
-        "today": "DATE(created_at) = CURRENT_DATE",
-        "week": "created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)",
-        "month": "created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 1 MONTH)",
-        "year": "created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 1 YEAR)"
+        "today": "DATE(t.date_created) = CURRENT_DATE",
+        "week": "t.date_created >= DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)",
+        "month": "t.date_created >= DATE_SUB(CURRENT_DATE, INTERVAL 1 MONTH)",
+        "year": "t.date_created >= DATE_SUB(CURRENT_DATE, INTERVAL 1 YEAR)"
     }
-    
     where_clause = f" WHERE {time_conditions[time_range]}" if time_range else ""
     
     status_counts = await execute_query(
         f"SELECT status, COUNT(*) as count FROM support_tickets{where_clause} GROUP BY status",
         fetch_all=True
     )
-    
     category_counts = await execute_query(
         f"""
-        SELECT c.name, COUNT(*) as count 
+        SELECT c.name, COUNT(*) as count
         FROM support_tickets t
         JOIN support_categories c ON t.category_id = c.id
         {where_clause}
@@ -600,7 +598,6 @@ async def get_support_stats(
         """,
         fetch_all=True
     )
-    
     priority_counts = await execute_query(
         f"SELECT priority, COUNT(*) as count FROM support_tickets{where_clause} GROUP BY priority",
         fetch_all=True
@@ -615,18 +612,14 @@ async def get_support_stats(
         "by_category": {},
         "by_priority": {}
     }
-    
     for row in status_counts:
         stats["total_tickets"] += row["count"]
         stats[row["status"]] = row["count"]
-    
     for row in category_counts:
         stats["by_category"][row["name"]] = row["count"]
-    
     for row in priority_counts:
         stats["by_priority"][row["priority"]] = row["count"]
     
-    await close_db()
     return stats
 
 async def get_ticket_with_details(ticket_id: int) -> Optional[dict]:
