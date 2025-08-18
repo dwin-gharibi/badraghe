@@ -99,9 +99,9 @@ function SignIn() {
         h='100%'
         alignItems='start'
         justifyContent='center'
-        mb={{ base: "30px", md: "60px" }}
+        mb={{ base: "15px", md: "30px" }}
         px={{ base: "25px", md: "0px" }}
-        mt={{ base: "10px", md: "8vh" }}
+        mt={{ base: "5px", md: "4vh" }}
         flexDirection='column'>
         <Box me='auto'>
           <Heading color={textColor} fontSize='36px' mb='10px'>

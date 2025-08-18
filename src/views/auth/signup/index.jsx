@@ -96,7 +96,7 @@ function SignUp() {
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
-        phone_number: formData.phoneNumber,
+        phone: formData.phoneNumber,
         password: formData.password,
       });
 
@@ -135,9 +135,9 @@ function SignUp() {
         h="100%"
         alignItems="start"
         justifyContent="center"
-        mb={{ base: "30px", md: "60px" }}
+        mb={{ base: "15px", md: "30px" }}
         px={{ base: "25px", md: "0px" }}
-        mt={{ base: "40px", md: "14vh" }}
+        mt={{ base: "10px", md: "3vh" }}
         flexDirection="column"
       >
         <Box me="auto">
@@ -165,34 +165,9 @@ function SignUp() {
           me="auto"
           mb={{ base: "20px", md: "auto" }}
         >
-          <Button
-            fontSize="sm"
-            me="0px"
-            mb="26px"
-            py="15px"
-            h="50px"
-            borderRadius="16px"
-            bg={googleBg}
-            color={googleText}
-            fontWeight="500"
-            _hover={googleHover}
-            _active={googleActive}
-            _focus={googleActive}
-            isDisabled={isLoading}
-          >
-            <Icon as={FcGoogle} w="20px" h="20px" me="10px" />
-            Sign up with Google
-          </Button>
-          <Flex align="center" mb="25px">
-            <HSeparator />
-            <Text color="gray.400" mx="14px">
-              or
-            </Text>
-            <HSeparator />
-          </Flex>
           <FormControl>
             <Flex direction={{ base: "column", md: "row" }} gap="4" mb="24px">
-              <FormControl isRequired flex="1">
+              <FormControl flex="1">
                 <FormLabel
                   htmlFor="first-name"
                   ms="4px"
@@ -217,7 +192,7 @@ function SignUp() {
                   isDisabled={isLoading}
                 />
               </FormControl>
-              <FormControl isRequired flex="1">
+              <FormControl flex="1">
                 <FormLabel
                   htmlFor="last-name"
                   ms="4px"
