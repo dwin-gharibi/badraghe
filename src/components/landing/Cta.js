@@ -80,6 +80,7 @@ export default function Cta() {
               fontWeight="bold"
               borderRadius="xl"
               leftIcon={<FaTicketAlt />}
+              onClick={() => window.scrollTo({ top: 450, behavior: "smooth" })}
               _hover={{ bg: "whiteAlpha.900", transform: "scale(1.05)", transition: "0.3s" }}
             >
               Book a Ticket
