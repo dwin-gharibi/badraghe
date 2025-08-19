@@ -48,7 +48,7 @@ async def get_my_profile(
     await connect_db()
     user = await execute_query(
         """
-        SELECT id, first_name, last_name, email, phone, 
+        SELECT id, first_name, last_name, email, phone, balance,
                country, state, city, address, zip_code,
                date_of_birth, gender, profile_picture_url,
                status, is_verified, bio, preferences,
@@ -103,7 +103,7 @@ async def update_my_profile(
 
     user = await execute_query(
         """
-        SELECT id, first_name, last_name, email, phone, 
+        SELECT id, first_name, last_name, email, phone, balance,
                country, state, city, address, zip_code,
                date_of_birth, gender, profile_picture_url,
                status, is_verified, bio, preferences,

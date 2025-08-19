@@ -8,6 +8,7 @@ import random
 import re
 from app.utils.sms_util import send_sms_ir_otp
 from app.utils.email_util import send_otp_email
+
 router = APIRouter()
 
 class SignupRequest(BaseModel):
@@ -45,7 +46,7 @@ async def send_otp(data: OTPRequest):
     if attempts >= 5:
         raise HTTPException(status_code=429, detail="OTP limit reached. Try again in 1 hour.")
 
-    otp = f"{random.randint(100000, 999999)}"
+    otp = f"{random.randint(100000, 999999)}"    
     await redis.set(f"otp:{recipient}", otp, ex=300)
     await redis.incr(limit_key)
     await redis.expire(limit_key, 3600)
