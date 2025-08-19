@@ -2,11 +2,11 @@ import {
   Button,
   Flex,
   Image,
-  Link,
   Text,
   useColorModeValue,
 } from "@chakra-ui/react";
 import React from "react";
+import { Link } from "react-router-dom";
 
 export default function SidebarDocs() {
   const bgColor = "linear-gradient(135deg, #868CFF 0%, #4318FF 100%)";
@@ -23,7 +23,7 @@ export default function SidebarDocs() {
       <Flex
         border='5px solid'
         borderColor={borderColor}
-        bg='linear-gradient(135deg, #868CFF 0%, #4318FF 100%)'
+        bg='linear-gradient(135deg, #ffffffff 0%, #ffffffff 100%)'
         borderRadius='50%'
         w='94px'
         h='94px'
@@ -63,20 +63,21 @@ export default function SidebarDocs() {
             Buy a new fantastic ticket right now...
         </Text>
       </Flex>
-      <Link href='https://badraghe.dwin.codes'>
         <Button
-          bg='whiteAlpha.300'
-          _hover={{ bg: "whiteAlpha.200" }}
-          _active={{ bg: "whiteAlpha.100" }}
-          mb={{ sm: "16px", xl: "24px" }}
-          color={"white"}
-          fontWeight='regular'
-          fontSize='sm'
-          minW='185px'
-          mx='auto'>
-          Buy new ticket
-        </Button>
-      </Link>
+            as={Link}
+            to="/user/reserve"
+            bg="whiteAlpha.300"
+            _hover={{ bg: "whiteAlpha.200" }}
+            _active={{ bg: "whiteAlpha.100" }}
+            mb={{ sm: "16px", xl: "24px" }}
+            color="white"
+            fontWeight="regular"
+            fontSize="sm"
+            minW="185px"
+            mx="auto"
+          >
+            Buy new ticket
+          </Button>
     </Flex>
   );
 }

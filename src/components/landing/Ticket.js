@@ -182,7 +182,7 @@ export default function TicketGrid({ tickets, onViewDetails, onReserve }) {
     id: ticket.id,
     type: ticket.transport_type,
     company: ticket.company_name || 'N/A',
-    price: `${(ticket.price / 1000000).toFixed(2)} ${ticket.currency}`,
+    price: `${ticket.price} ${ticket.currency}`,
     classType: ticket.class_type || 'Economy',
     from: ticket.departure_city,
     to: ticket.arrival_city,

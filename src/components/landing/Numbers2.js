@@ -48,19 +48,7 @@ export default function NumbersSection2() {
         setLoading(false);
       }
     };
-
-    if (localStorage.getItem('authToken')) {
-      fetchStats();
-    } else {
-      setLoading(false);
-      toast({
-        title: 'Authentication Required',
-        description: 'Please log in to view statistics.',
-        status: 'warning',
-        duration: 5000,
-        isClosable: true,
-      });
-    }
+    fetchStats();
   }, [toast]);
 
   return (

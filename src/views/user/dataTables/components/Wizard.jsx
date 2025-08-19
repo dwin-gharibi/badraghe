@@ -149,6 +149,7 @@ export default function TicketWizard() {
         currency: ticket.currency,
         payment_method_id: paymentMethod,
       };
+      console.log("data:", paymentData);
       await payForReservation(reservationId, paymentData);
 
       toast({

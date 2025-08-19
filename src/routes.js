@@ -14,15 +14,16 @@ import {
   MdOutlineStar,
   MdPayments,
   MdOutlineShoppingCart,
+  MdOutlineRocket,
   MdAirplaneTicket,
   MdGroup,
+  MdNotifications,
+  MdSupport,
 } from 'react-icons/md';
 
 import PrivateRoute from "components/auth/PrivateRoute";
-import MainDashboard from 'views/user/default';
 import NFTMarketplace from 'views/user/marketplace';
 import Profile from 'views/user/profile';
-import DataTables from 'views/user/dataTables';
 
 import RefundRequestsTablePage from 'views/user/dataTables/refunds';
 import ReviewsTablePage from 'views/user/dataTables/reviews';
@@ -39,16 +40,9 @@ import ReferralsTablePage from 'views/user/dataTables/referrals';
 import ReservationsTablePage from 'views/user/dataTables/reservations';
 import ServiceProvidersTablePage from 'views/user/dataTables/service_providers';
 import TicketWizardPage from 'views/user/dataTables/reserve';
-
-
-import RTL from 'views/user/rtl';
-
 import SignInCentered from 'views/auth/signIn';
 import SignUpCentered from 'views/auth/signup';
-import TicketWizard from 'views/auth/reserve';
-
 import OtpCentered from 'views/auth/otp';
-import BillingPage from 'views/auth/billing';
 
 import BaragheLanding from 'views/main/landing';
 
@@ -62,7 +56,7 @@ const routes = [
   {
     name: 'Dashboard',
     layout: '/user',
-    path: '/nft-marketplace',
+    path: '/dashboard',
     icon: (
       <Icon
         as={MdDashboard}
@@ -76,139 +70,109 @@ const routes = [
     secondary: true,
   },
   {
-    name: 'Discount Codes',
-    layout: '/user',
-    icon: <Icon as={MdDiscount} width="20px" height="20px" color="inherit" />,
-    path: '/discounts',
-    component: (<PrivateRoute><DiscountsTablePage /></PrivateRoute>),
-  },
-  {
-    name: 'Referrals',
-    layout: '/user',
-    icon: <Icon as={MdGroup} width="20px" height="20px" color="inherit" />,
-    path: '/referrals',
-    component: (<PrivateRoute><ReferralsTablePage /></PrivateRoute>),
-  },
-  {
     name: 'Reservations',
     layout: '/user',
-    icon: <Icon as={MdAirplaneTicket} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdAirplaneTicket} width="20px" height="20px" mt="5px" color="inherit" />,
     path: '/reservations',
     component: (<PrivateRoute><ReservationsTablePage /></PrivateRoute>),
   },
   {
-    name: 'Service Providers',
-    layout: '/user',
-    icon: <Icon as={MdDesignServices} width="20px" height="20px" color="inherit" />,
-    path: '/service-providers',
-    component: (<PrivateRoute><ServiceProvidersTablePage /></PrivateRoute>),
-  },
-
-  {
-    name: 'Users',
-    layout: '/user',
-    icon: <Icon as={MdSupervisorAccount} width="20px" height="20px" color="inherit" />,
-    path: '/users',
-    component: (<PrivateRoute><UsersTablePage /></PrivateRoute>),
-  },
-  {
     name: 'Reserve a ticket',
     layout: '/user',
-    icon: <Icon as={MdSupervisorAccount} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdSupervisorAccount} width="20px" height="20px" mt="5px" color="inherit" />,
     path: '/reserve',
     component: (<PrivateRoute><TicketWizardPage /></PrivateRoute>),
   },
-
+  {
+    name: 'Tickets',
+    layout: '/user',
+    icon: <Icon as={MdOutlineRocket} width="20px" height="20px" mt="5px" color="inherit" />,
+    path: '/tickets',
+    component: (<PrivateRoute><TicketsTablePage /></PrivateRoute>),
+  },
   {
     name: 'Refunds',
     layout: '/user',
-    icon: <Icon as={MdCancelScheduleSend} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdCancelScheduleSend} width="20px" height="20px" mt="5px" color="inherit" />,
     path: '/refunds',
     component: (<PrivateRoute><RefundRequestsTablePage /></PrivateRoute>),
   },
   {
     name: 'Payments',
     layout: '/user',
-    icon: <Icon as={MdPayments} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdPayments} width="20px" height="20px" mt="5px" color="inherit" />,
     path: '/payments',
     component: (<PrivateRoute><PaymentsTablePage /></PrivateRoute>),
   },
   {
     name: 'Reviews',
     layout: '/user',
-    icon: <Icon as={MdOutlineStar} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdOutlineStar} width="20px" height="20px" mt="5px" color="inherit" />,
     path: '/reviews',
     component: (<PrivateRoute><ReviewsTablePage /></PrivateRoute>),
   },
   {
-    name: 'Data Tables',
+    name: 'Notifications',
     layout: '/user',
-    icon: <Icon as={MdBarChart} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdNotifications} width="20px" height="20px" mt="5px" color="inherit" />,
     path: '/notifications',
     component: (<PrivateRoute><AllNotificationsTablePage /></PrivateRoute>),
   },
   {
-    name: 'Data Tables',
+    name: 'Support Tickets',
     layout: '/user',
-    icon: <Icon as={MdBarChart} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdSupport} width="20px" height="20px" mt="5px" color="inherit" />,
     path: '/support-tickets',
     component: (<PrivateRoute><SupportTicketsTablePage /></PrivateRoute>),
-  },
-  {
-    name: 'Data Tables',
-    layout: '/user',
-    icon: <Icon as={MdBarChart} width="20px" height="20px" color="inherit" />,
-    path: '/tickets',
-    component: (<PrivateRoute><TicketsTablePage /></PrivateRoute>),
   },
   {
     name: 'Profile',
     layout: '/user',
     path: '/profile',
-    icon: <Icon as={MdPerson} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdPerson} width="20px" height="20px" mt="5px" color="inherit" />,
     component: (<PrivateRoute><Profile /></PrivateRoute>),
   },
   {
-    name: 'Reserve',
-    layout: '/auth',
-    path: '/reserve',
-    icon: <Icon as={MdLock} width="20px" height="20px" color="inherit" />,
-    component: <TicketWizard />,
+    name: 'Discount Codes',
+    layout: '/user',
+    icon: <Icon as={MdDiscount} width="20px" height="20px" mt="5px" color="inherit" />,
+    path: '/discounts',
+    component: (<PrivateRoute><DiscountsTablePage /></PrivateRoute>),
   },
   {
-    name: 'Billing',
-    layout: '/auth',
-    path: '/billing',
-    icon: <Icon as={MdLock} width="20px" height="20px" color="inherit" />,
-    component: <BillingPage />,
+    name: 'Referrals',
+    layout: '/user',
+    icon: <Icon as={MdGroup} width="20px" height="20px" mt="5px" color="inherit" />,
+    path: '/referrals',
+    component: (<PrivateRoute><ReferralsTablePage /></PrivateRoute>),
+  },
+  {
+    name: 'Users',
+    layout: '/user',
+    icon: <Icon as={MdSupervisorAccount} width="20px" height="20px" mt="5px" color="inherit" />,
+    path: '/users',
+    component: (<PrivateRoute><UsersTablePage /></PrivateRoute>),
   },
   {
     name: 'Sign In',
     layout: '/auth',
     path: '/sign-in',
-    icon: <Icon as={MdLock} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdLock} width="20px" height="20px" mt="5px" color="inherit" />,
     component: <SignInCentered />,
   },
   {
     name: 'Sign Up',
     layout: '/auth',
     path: '/sign-up',
-    icon: <Icon as={MdLock} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdLock} width="20px" height="20px" mt="5px" color="inherit" />,
     component: <SignUpCentered />,
   },
   {
     name: 'Otp',
     layout: '/auth',
     path: '/otp',
-    icon: <Icon as={MdLock} width="20px" height="20px" color="inherit" />,
+    icon: <Icon as={MdLock} width="20px" height="20px" mt="5px" color="inherit" />,
     component: <OtpCentered />,
-  },
-  {
-    name: 'RTL user',
-    layout: '/rtl',
-    path: '/rtl-default',
-    icon: <Icon as={MdHome} width="20px" height="20px" color="inherit" />,
-    component: <RTL />,
   },
 ];
 

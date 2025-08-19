@@ -95,7 +95,7 @@ export default function UserNavbar(props) {
 
 						<BreadcrumbItem color={secondaryText} fontSize='sm' mb='5px'>
 							<BreadcrumbLink href='#' color={secondaryText}>
-								{brandText}
+								Dashboard
 							</BreadcrumbLink>
 						</BreadcrumbItem>
 					</Breadcrumb>
@@ -115,7 +115,7 @@ export default function UserNavbar(props) {
 						_focus={{
 							boxShadow: 'none'
 						}}>
-						{brandText}
+						Badraghe
 					</Link>
 				</Box>
 				<Box ms='auto' w={{ sm: '100%', md: 'unset' }}>

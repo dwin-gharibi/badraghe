@@ -17,6 +17,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
+import { FaCoins } from 'react-icons/fa';
 import { SearchBar } from 'components/navbar/searchBar/SearchBar';
 import { SidebarResponsive } from 'components/sidebar/Sidebar';
 import { ItemContent } from 'components/menu/ItemContent';
@@ -25,7 +26,7 @@ import { MdNotificationsNone, MdInfoOutline } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { FaEthereum } from 'react-icons/fa';
 import routes from 'routes';
-import { getUserProfile, getUserNotifications, createPayment, getPaymentMethods } from 'services/api';
+import { getUserProfile, getUserNotifications, createPayment, getPaymentMethods, getUserBalance } from 'services/api';
 
 export default function HeaderLinks(props) {
   const { secondary } = props;
@@ -57,6 +58,11 @@ export default function HeaderLinks(props) {
           setUser(userResponse);
           const notificationsResponse = await getUserNotifications();
           setNotifications(notificationsResponse.data || notificationsResponse);
+
+          if (userResponse?.id) {
+            const balanceResponse = await getUserBalance(userResponse.id);
+            setUser((prev) => ({ ...prev, balance: balanceResponse }));
+          }
         }
       } catch (err) {
         console.error('Fetch Data Error:', err);
@@ -142,19 +148,6 @@ export default function HeaderLinks(props) {
         >
           <Icon color={ethColor} w="9px" h="14px" as={FaEthereum} />
         </Flex>
-        <Text
-          w="max-content"
-          color={ethColor}
-          fontSize="sm"
-          fontWeight="700"
-          me="6px"
-        >
-          1,924
-          <Text as="span" display={{ base: 'none', md: 'unset' }}>
-            {' '}
-            ETH
-          </Text>
-        </Text>
       </Flex>
       <SidebarResponsive routes={routes} />
       <Menu>
@@ -308,6 +301,25 @@ export default function HeaderLinks(props) {
               color={textColor}
             >
               👋&nbsp; Hey, {user?.first_name || 'Guest'}
+            </Text>
+          </Flex>
+          <Flex w="100%" mb="0px" align="center">
+            <Text
+              ps="20px"
+              pt="16px"
+              pb="10px"
+              w="100%"
+              borderBottom="1px solid"
+              borderColor={borderColor}
+              fontSize="sm"
+              fontWeight="700"
+              color={textColor}
+              display="flex"
+              alignItems="center"
+              gap="8px"
+            >
+              <Icon as={FaCoins} color="yellow.500" boxSize={4} />
+              Balance {user?.balance || '0'} IRR
             </Text>
           </Flex>
           <Flex flexDirection="column" p="10px">

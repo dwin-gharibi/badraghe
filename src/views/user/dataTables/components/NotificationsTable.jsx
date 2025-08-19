@@ -11,12 +11,16 @@ import {
   Thead,
   Tr,
   useColorModeValue,
+  Input,
+  Select,
+  IconButton,
 } from '@chakra-ui/react';
-import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table';
+import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, getPaginationRowModel, getFilteredRowModel, useReactTable } from '@tanstack/react-table';
 import Card from 'components/card/Card';
 import Menu from 'components/menu/MainMenu';
 import { getUserNotifications } from 'services/api';
 import { useToast } from '@chakra-ui/react';
+import { ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
 
 const columnHelper = createColumnHelper();
 
@@ -25,6 +29,8 @@ export default function NotificationsTable() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const textColor = useColorModeValue('secondaryGray.900', 'white');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
@@ -102,10 +108,14 @@ export default function NotificationsTable() {
   const table = useReactTable({
     data,
     columns,
-    state: { sorting },
+    state: { sorting, pagination, globalFilter },
     onSortingChange: setSorting,
+    onPaginationChange: setPagination,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     debugTable: true,
   });
 
@@ -119,6 +129,40 @@ export default function NotificationsTable() {
           Notifications Table
         </Text>
         <Menu />
+      </Flex>
+      <Flex px="25px" mb="8px" justifyContent="space-between" align="center">
+        <Input
+          placeholder="Search notifications..."
+          value={globalFilter ?? ''}
+          onChange={(e) => setGlobalFilter(String(e.target.value))}
+          w="300px"
+        />
+        <Flex align="center">
+          <Select
+            value={pagination.pageSize}
+            onChange={(e) => setPagination((old) => ({ ...old, pageSize: Number(e.target.value) }))}
+            w="100px"
+          >
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+          </Select>
+          <IconButton
+            icon={<ChevronLeftIcon />}
+            onClick={() => table.previousPage()}
+            isDisabled={!table.getCanPreviousPage()}
+            ml="2"
+          />
+          <Text mx="2" minW="100px" textAlign="center">
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+          </Text>
+          <IconButton
+            icon={<ChevronRightIcon />}
+            onClick={() => table.nextPage()}
+            isDisabled={!table.getCanNextPage()}
+          />
+        </Flex>
       </Flex>
       <Box>
         <Table variant="simple" color="gray.500" mb="24px" mt="12px">
@@ -149,7 +193,7 @@ export default function NotificationsTable() {
             ))}
           </Thead>
           <Tbody>
-            {table.getRowModel().rows.slice(0, 11).map((row) => (
+            {table.getRowModel().rows.map((row) => (
               <Tr key={row.id}>
                 {row.getVisibleCells().map((cell) => (
                   <Td

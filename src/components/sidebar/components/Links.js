@@ -21,6 +21,12 @@ export function SidebarLinks(props) {
 
   const createLinks = (routes) => {
     return routes.map((route, index) => {
+      if (route.path === "/otp" || route.path === "/sign-in" || route.path === "/sign-up" || 
+        route.path === "/users" || route.path === "/referrals" || route.path === "/discounts" || route.path === "/reserve"
+      ) {
+        return null;
+      }
+
       if (route.category) {
         return (
           <>
