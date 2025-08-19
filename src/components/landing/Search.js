@@ -153,7 +153,7 @@ export default function TravelSearch({ onSearchResults }) {
           py={2}
           flex={{ base: '1 1 45%', md: '1 1 auto' }}
         >
-          <Icon as={FaMapMarkerAlt} color="brand.500" />
+          <Icon as={FaMapMarkerAlt} color="green.300" />
           <Input
             name="from"
             value={formData.from}
@@ -171,7 +171,7 @@ export default function TravelSearch({ onSearchResults }) {
           py={2}
           flex={{ base: '1 1 45%', md: '1 1 auto' }}
         >
-          <Icon as={FaMapMarkerAlt} color="brand.500" />
+          <Icon as={FaMapMarkerAlt} color="red.300" />
           <Input
             name="to"
             value={formData.to}
