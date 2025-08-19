@@ -190,10 +190,10 @@ export default function SexyHeroWithSearch() {
           throw new Error('Invalid transport type');
       }
       toast({
-        title: 'Ticket Details',
+        title: 'Now you can see ticket details',
         description: response.summary,
         status: 'info',
-        duration: 7000,
+        duration: 10000,
         isClosable: true,
       });
     } catch (err) {

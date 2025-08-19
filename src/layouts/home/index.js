@@ -16,13 +16,12 @@ import {
   useDisclosure,
   useColorModeValue,
 } from '@chakra-ui/react';
-import { FaFacebookF, FaTwitter, FaGithub, FaLinkedinIn, FaInstagram, FaInfoCircle, FaTicketAlt, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaFacebookF, FaTwitter, FaGithub, FaLinkedinIn, FaInstagram, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { HamburgerIcon, CloseIcon } from '@chakra-ui/icons';
 import NumbersSection from 'components/landing/Numbers';
 import NumbersSection2 from 'components/landing/Numbers2';
 import TravelSearch from 'components/landing/Search';
 import Cta from 'components/landing/Cta';
-
 import HeroSection from 'components/landing/Hero';
 import SexyNavbar from 'components/landing/Navbar';
 import TicketGrid from 'components/landing/Ticket';
@@ -47,8 +46,9 @@ export default function BadragheTravel() {
   const [loading, setLoading] = useState(false);
 
   const handleSearchResults = (searchTickets, currentPage, limit) => {
-    setTickets(searchTickets);
-    setTotalTickets(searchTickets.length);
+    const validTickets = Array.isArray(searchTickets) ? searchTickets : [];
+    setTickets(validTickets);
+    setTotalTickets(validTickets.length);
     setPage(currentPage);
     setHasSearched(true);
   };
@@ -58,7 +58,7 @@ export default function BadragheTravel() {
     try {
       let response;
       switch (transportType) {
-        case 'flight':
+        case 'plane':
           response = await getFlightDetails(ticketId);
           break;
         case 'train':
@@ -70,9 +70,14 @@ export default function BadragheTravel() {
         default:
           throw new Error('Invalid transport type');
       }
+      setTickets((prevTickets) =>
+        prevTickets.map((ticket) =>
+          ticket.id === ticketId ? { ...ticket, ...response, transport_type: transportType } : ticket
+        )
+      );
       toast({
-        title: 'Ticket Details',
-        description: response.summary,
+        title: 'Now you can see ticket details',
+        description: response.summary || 'Details loaded successfully',
         status: 'info',
         duration: 7000,
         isClosable: true,
@@ -133,6 +138,7 @@ export default function BadragheTravel() {
               tickets={tickets.slice((page - 1) * limit, page * limit)}
               onViewDetails={handleViewDetails}
               onReserve={(ticket) => navigate('/user/reserve', { state: { ticket } })}
+              loading={loading}
             />
             <HStack justify="center" mt={4}>
               <Button
@@ -142,7 +148,7 @@ export default function BadragheTravel() {
                 colorScheme="brand"
                 size="sm"
               >
-                
+                Previous
               </Button>
               <Text color={textColor}>
                 Page {page} of {Math.ceil(totalTickets / limit)}
@@ -154,7 +160,7 @@ export default function BadragheTravel() {
                 colorScheme="brand"
                 size="sm"
               >
-                
+                Next
               </Button>
             </HStack>
           </VStack>
@@ -163,7 +169,6 @@ export default function BadragheTravel() {
       <NumbersSection />
       <NumbersSection2 />
       <Cta />
-
       <Box flex="1" />
       <Box bg={bg} py={12} borderTop="1px solid" borderColor="secondaryGray.300">
         <Container maxW="container.xl">
