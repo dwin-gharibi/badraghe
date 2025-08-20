@@ -333,16 +333,12 @@ export default function TicketsTable() {
             aria-label="View"
             onClick={() => handleView(info.row.original.id)}
           />
-          <Button
-            mt="3"
-            colorScheme="brand"
-            leftIcon={<FaTicketAlt />}
-            size="sm"
-            width="full"
+          <IconButton
+            icon={<FaTicketAlt />}
+            colorScheme="green"
+            aria-label="View"
             onClick={() => handleReserve(info.row.original)}
-          >
-            Reserve Ticket
-          </Button>
+          />
         </Stack>
       ),
     }),

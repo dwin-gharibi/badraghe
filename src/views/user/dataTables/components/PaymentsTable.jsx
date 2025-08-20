@@ -184,16 +184,6 @@ export default function PaymentsTable() {
       ),
       cell: (info) => <Text color={textColor} fontSize="sm" fontWeight="700">{info.getValue()}</Text>,
     }),
-    columnHelper.accessor('user_id', {
-      id: 'user_id',
-      header: () => (
-        <Flex align="center" justifyContent="space-between" fontSize={{ sm: '10px', lg: '12px' }} color="gray.400">
-          <FaUser style={{ marginRight: '8px' }} />
-          USER ID
-        </Flex>
-      ),
-      cell: (info) => <Text color={textColor} fontSize="sm" fontWeight="700">{info.getValue()}</Text>,
-    }),
     columnHelper.accessor('reservation_id', {
       id: 'reservation_id',
       header: () => (

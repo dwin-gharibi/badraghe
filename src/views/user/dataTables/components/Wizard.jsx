@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -49,6 +48,9 @@ export default function TicketWizard() {
 
   useEffect(() => {
     const ticketData = location.state?.ticket;
+
+    console.log(ticketData);
+
     if (!ticketData || !ticketData.id) {
       toast({
         title: 'No Ticket Selected',
@@ -60,17 +62,30 @@ export default function TicketWizard() {
       navigate('/');
       return;
     }
+
+    let price = '';
+    let currency = '';
+
+    if (typeof ticketData.price === 'string') {
+      const parts = ticketData.price.split(' ');
+      price = parts[0] || '';
+      currency = parts[1] || '';
+    } else if (typeof ticketData.price === 'number') {
+      price = ticketData.price;
+      currency = ticketData.currency || '';
+    }
+
     setTicket({
       id: ticketData.id || '',
-      transport_type: ticketData.type || '',
-      departure_city: ticketData.from || '',
-      arrival_city: ticketData.to || '',
-      price: ticketData.price?.split(' ')[0] || '',
-      currency: ticketData.price?.split(' ')[1] || '',
-      departure_time: ticketData.departureTime || '',
-      arrival_time: ticketData.arrivalTime || '',
-      company_name: ticketData.company || 'N/A',
-      class_type: ticketData.classType || 'Economy',
+      transport_type: ticketData.type || ticketData.transport_type || '',
+      departure_city: ticketData.from || ticketData.departure_city || '',
+      arrival_city: ticketData.to || ticketData.arrival_city || '',
+      price,
+      currency,
+      departure_time: ticketData.departureTime || ticketData.departure_time || '',
+      arrival_time: ticketData.arrivalTime || ticketData.arrival_time || '',
+      company_name: ticketData.company || ticketData.company_name || 'N/A',
+      class_type: ticketData.classType || ticketData.class_type || 'Economy',
       features: ticketData.features || [],
     });
   }, [location.state, navigate, toast]);

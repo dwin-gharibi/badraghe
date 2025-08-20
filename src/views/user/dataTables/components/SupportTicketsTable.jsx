@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useEffect, useState } from 'react';
 import {
   Flex,
@@ -189,16 +188,6 @@ export default function SupportTicketsTable() {
         <Flex align="center" justifyContent="space-between" fontSize={{ sm: '10px', lg: '12px' }} color="gray.400">
           <FaIdBadge style={{ marginRight: '8px' }} />
           ID
-        </Flex>
-      ),
-      cell: (info) => <Text color={textColor} fontSize="sm" fontWeight="700">{info.getValue()}</Text>,
-    }),
-    columnHelper.accessor('user_id', {
-      id: 'user_id',
-      header: () => (
-        <Flex align="center" justifyContent="space-between" fontSize={{ sm: '10px', lg: '12px' }} color="gray.400">
-          <FaUser style={{ marginRight: '8px' }} />
-          USER ID
         </Flex>
       ),
       cell: (info) => <Text color={textColor} fontSize="sm" fontWeight="700">{info.getValue()}</Text>,
@@ -448,7 +437,7 @@ export default function SupportTicketsTable() {
             </Text>
           ) : (
             <Table variant="simple" color="gray.500" mb="24px" mt="12px">
-              <Thead position="sticky" top={0} bg={useColorModeValue('white', 'gray.800')}>
+              <Thead position="sticky" top={0} bg="white">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <Tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
