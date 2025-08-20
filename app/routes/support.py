@@ -308,6 +308,7 @@ async def get_support_tickets(
     query += " ORDER BY t.created_at DESC LIMIT %s OFFSET %s"
     params.extend([limit, skip])
     
+    await connect_db()
     tickets = await execute_query(query, params, fetch_all=True)
     await close_db()
     return tickets
@@ -621,6 +622,26 @@ async def get_support_stats(
         stats["by_priority"][row["priority"]] = row["count"]
     
     return stats
+
+@router.get("/count", response_model=Dict[str, int])
+async def get_support_ticket_count(
+    current_user: dict = Depends(get_current_user),
+    user_id: int = None
+):
+    await connect_db()
+    query = """
+        SELECT COUNT(*) as count
+        FROM support_tickets st
+        WHERE st.user_id = %s
+    """
+    params = (current_user["user_id"],)
+    if user_id:
+        query += " AND st.user_id = %s"
+        params = (current_user["user_id"], user_id)
+    
+    result = await execute_query(query, params, fetch_one=True)
+    await close_db()
+    return {"count": result["count"]}
 
 async def get_ticket_with_details(ticket_id: int) -> Optional[dict]:
     await connect_db()
