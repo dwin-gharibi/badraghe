@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: 'http://localhost:8000',
-  timeout: 60000,
+  timeout: 600000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -460,9 +460,16 @@ export const deleteReservation = async (reservationId) => {
   }
 };
 
-export const payForReservation = async (reservationId, data) => {
+export const payForReservation = async (reservationId, paymentData) => {
   try {
-    const response = await api.post(`/reservations/${reservationId}/pay`, data);
+    const response = await api.post(
+      `/reservations/${reservationId}/pay`,
+      {
+        payment_method_id: paymentData.payment_method_id,
+        amount: paymentData.amount,
+        currency: paymentData.currency,
+      }
+    );
     return response.data;
   } catch (error) {
     console.error('Pay for Reservation Error:', error);
@@ -821,6 +828,19 @@ export const markMultipleNotificationsAsRead = async (notificationIds) => {
   } catch (error) {
     console.error('Mark Multiple Notifications as Read Error:', error);
     throw error.response?.data?.detail || 'Failed to mark notifications as read';
+  }
+};
+
+export const getTicketDetails = async (ticketId) => {
+  try {
+    const response = await api.get(`/tickets/${ticketId}`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.detail || 'Failed to fetch ticket details');
   }
 };
 
@@ -1653,6 +1673,7 @@ export const getProviderTickets = async (providerId, {
   try {
     const response = await api.get(`/service-providers/${providerId}/tickets`, {
       params: { status, from_date, to_date, skip, limit },
+      timeout: 300000000
     });
     return response.data;
   } catch (error) {

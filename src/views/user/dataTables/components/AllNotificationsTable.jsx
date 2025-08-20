@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useEffect, useState } from 'react';
 import {
   Flex,
@@ -67,16 +66,14 @@ export default function AllNotificationsTable() {
       }
       setLoading(true);
       try {
-        // Fetch total count
         let total = 0;
         try {
           const countResponse = await getUnreadNotificationCount();
-          total = countResponse.total || countResponse.count || 0; // Adjust based on actual response structure
+          total = countResponse.total || countResponse.count || 0;
         } catch (countErr) {
           console.warn('Failed to fetch total count:', countErr);
         }
 
-        // Fetch notifications
         const params = {
           skip: pageIndex * pageSize,
           limit: pageSize,
@@ -85,11 +82,9 @@ export default function AllNotificationsTable() {
         const response = await getUserNotifications(params);
         const notifications = response.data || response;
         setData(notifications);
-        // Set total count: use API count if available, else estimate
         if (total > 0) {
           setTotalCount(total);
         } else {
-          // If response length equals pageSize, assume more pages exist
           setTotalCount(notifications.length === pageSize ? (pageIndex + 2) * pageSize : notifications.length);
         }
       } catch (err) {
@@ -109,7 +104,6 @@ export default function AllNotificationsTable() {
     fetchNotifications();
   }, [pageIndex, userId, toast]);
 
-  // Client-side search filtering
   useEffect(() => {
     if (!searchTerm) {
       setFilteredData(data);
@@ -150,7 +144,6 @@ export default function AllNotificationsTable() {
       };
       const response = await getUserNotifications(params);
       setData(response.data || response);
-      // Update total count
       let total = 0;
       try {
         const countResponse = await getUnreadNotificationCount();
@@ -335,7 +328,7 @@ export default function AllNotificationsTable() {
             </Text>
           ) : (
             <Table variant="simple" color="gray.500" mb="24px" mt="12px">
-              <Thead position="sticky" top={0} bg={useColorModeValue('white', 'gray.800')}>
+              <Thead position="sticky" top={0} bg="white">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <Tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (

@@ -19,6 +19,7 @@ import {
   MdGroup,
   MdNotifications,
   MdSupport,
+  MdExitToApp
 } from 'react-icons/md';
 
 import PrivateRoute from "components/auth/PrivateRoute";
@@ -29,7 +30,7 @@ import RefundRequestsTablePage from 'views/user/dataTables/refunds';
 import ReviewsTablePage from 'views/user/dataTables/reviews';
 import PaymentsTablePage from 'views/user/dataTables/payments';
 import AllNotificationsTablePage from 'views/user/dataTables/notifications';
-
+import Logout from 'Logout';
 import TicketsTablePage from 'views/user/dataTables/tickets';
 import SupportTicketsTablePage from 'views/user/dataTables/support_tickets';
 
@@ -166,6 +167,13 @@ const routes = [
     path: '/sign-up',
     icon: <Icon as={MdLock} width="20px" height="20px" mt="5px" color="inherit" />,
     component: <SignUpCentered />,
+  },
+  {
+    name: 'Logout',
+    layout: '/auth',
+    path: '/logout',
+    icon: <Icon as={MdExitToApp} width="20px" height="20px" mt="5px" color="inherit" />,
+    component: <Logout />,
   },
   {
     name: 'Otp',
