@@ -857,7 +857,7 @@ export const updateNotification = async (notificationId, data) => {
 export const deleteNotification = async (notificationId) => {
   try {
     const response = await api.delete(`/notifications/${notificationId}`);
-    return response.data;
+    return response?.data ?? ""
   } catch (error) {
     console.error('Delete Notification Error:', error);
     throw error.response?.data?.detail || 'Failed to delete notification';
@@ -867,7 +867,7 @@ export const deleteNotification = async (notificationId) => {
 export const deleteAllUserNotifications = async () => {
   try {
     const response = await api.delete('/notifications/user/all');
-    return response.data;
+    return response?.data ?? "";
   } catch (error) {
     console.error('Delete All User Notifications Error:', error);
     throw error.response?.data?.detail || 'Failed to delete all user notifications';
@@ -1514,6 +1514,75 @@ export const removePermissionFromRole = async (roleId, permissionId) => {
   }
 };
 
+export const getSupportTicketCount = async ({ user_id }) => {
+  try {
+    const response = await api.get(`/support/count`, {
+      params: { user_id },
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.detail || 'Failed to fetch support ticket count');
+  }
+};
+
+export const getPaymentCount = async ({ user_id }) => {
+  try {
+    const response = await api.get(`/payments/count`, {
+      params: { user_id },
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.detail || 'Failed to fetch payment count');
+  }
+};
+
+export const getPaymentDetails = async (paymentId) => {
+  try {
+    const response = await api.get(`/payments/${paymentId}`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.detail || 'Failed to fetch payment details');
+  }
+};
+
+export const getRefundRequestCount = async ({ user_id }) => {
+  try {
+    const response = await api.get(`/payments/refunds/count`, {
+      params: { user_id },
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.detail || 'Failed to fetch refund request count');
+  }
+};
+
+export const getRefundRequestDetails = async (refundRequestId) => {
+  try {
+    const response = await api.get(`/payments/refunds/${refundRequestId}`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.detail || 'Failed to fetch refund request details');
+  }
+};
+
+
 export const createPermission = async (data) => {
   try {
     const response = await api.post('/roles/permissions', data);
@@ -1965,6 +2034,20 @@ export const getBusFeaturesAI = async (ticket_id) => {
   } catch (error) {
     console.error('Get Bus Features Error:', error);
     throw error.response?.data?.detail || 'Failed to fetch bus features';
+  }
+};
+
+export const getNotificationCount = async ({ unread_only = false }) => {
+  try {
+    const response = await api.get(`/notifications/count`, {
+      params: { unread_only },
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+    return response.data.count;
+  } catch (error) {
+    throw new Error(error.response?.data?.detail || 'Failed to fetch notification count');
   }
 };
 
