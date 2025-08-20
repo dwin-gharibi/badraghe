@@ -27,15 +27,15 @@ import {
   ModalCloseButton,
   Button,
   VStack,
+  Select,
 } from '@chakra-ui/react';
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table';
 import Card from 'components/card/Card';
 import Menu from 'components/menu/MainMenu';
-import Pagination from 'components/Pagination';
-import { getSupportTickets, deleteSupportTicket, getSupportTicket, getSupportStats } from 'services/api';
+import { getSupportTickets, deleteSupportTicket, getSupportTicket, getSupportTicketCount } from 'services/api';
 import { useToast } from '@chakra-ui/react';
 import { FaSearch, FaEye, FaEdit, FaTrash, FaIdBadge, FaUser, FaTag, FaComment, FaCheckCircle, FaClock, FaCog, FaList, FaEnvelope, FaRocket } from 'react-icons/fa';
-
+import { ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
 import { useAuth } from '../../../../useAuth';
 
 const columnHelper = createColumnHelper();
@@ -48,11 +48,10 @@ export default function SupportTicketsTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [pageIndex, setPageIndex] = useState(0);
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
-  const pageSize = 10;
   const textColor = useColorModeValue('secondaryGray.900', 'white');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
@@ -68,33 +67,18 @@ export default function SupportTicketsTable() {
       }
       setLoading(true);
       try {
-        // Fetch total count
-        let total = 0;
-        try {
-          const statsResponse = await getSupportStats();
-          total = statsResponse.total_tickets || 0;
-        } catch (statsErr) {
-          console.warn('Failed to fetch total count:', statsErr);
-        }
-
-        // Fetch tickets
-        const params = {
-          skip: pageIndex * pageSize,
-          limit: pageSize,
-          user_id: userId,
-          search: searchTerm || undefined,
-        };
-        const response = await getSupportTickets(params);
-        const tickets = response.data || response;
-        setData(tickets);
-        // Set total count: use API count if available, else estimate
-        if (total > 0) {
-          setTotalCount(total);
-        } else {
-          setTotalCount(tickets.length === pageSize ? (pageIndex + 2) * pageSize : tickets.length);
-        }
+        const [tickets, count] = await Promise.all([
+          getSupportTickets({
+            limit: pagination.pageSize,
+            offset: pagination.pageIndex * pagination.pageSize,
+            user_id: userId,
+            search: searchTerm || undefined,
+          }),
+          getSupportTicketCount({ user_id: userId }),
+        ]);
+        setData(tickets.data || tickets);
+        setTotalCount(count.count);
       } catch (err) {
-        console.error('Error Details:', err);
         setError(err.response?.data?.detail || err.message || 'Failed to fetch support tickets');
         toast({
           title: 'Error',
@@ -108,9 +92,8 @@ export default function SupportTicketsTable() {
       }
     };
     fetchSupportTickets();
-  }, [pageIndex, userId, searchTerm, toast]);
+  }, [pagination.pageIndex, pagination.pageSize, userId, searchTerm, toast]);
 
-  // Client-side search filtering as fallback
   useEffect(() => {
     if (!searchTerm) {
       setFilteredData(data);
@@ -148,25 +131,17 @@ export default function SupportTicketsTable() {
         isClosable: true,
       });
       const params = {
-        skip: pageIndex * pageSize,
-        limit: pageSize,
+        limit: pagination.pageSize,
+        offset: pagination.pageIndex * pagination.pageSize,
         user_id: userId,
         search: searchTerm || undefined,
       };
-      const response = await getSupportTickets(params);
+      const [response, count] = await Promise.all([
+        getSupportTickets(params),
+        getSupportTicketCount({ user_id: userId }),
+      ]);
       setData(response.data || response);
-      let total = 0;
-      try {
-        const statsResponse = await getSupportStats();
-        total = statsResponse.total_tickets || 0;
-      } catch (statsErr) {
-        console.warn('Failed to fetch total count:', statsErr);
-      }
-      if (total > 0) {
-        setTotalCount(total);
-      } else {
-        setTotalCount(response.data.length === pageSize ? (pageIndex + 2) * pageSize : response.data.length);
-      }
+      setTotalCount(count.count);
     } catch (err) {
       toast({
         title: 'Error',
@@ -200,7 +175,11 @@ export default function SupportTicketsTable() {
 
   const handleEdit = (ticketId) => {
     console.log('Edit ticket', ticketId);
-    // Implement edit functionality (e.g., open a form modal) if needed
+  };
+
+  const handleSearch = (e) => {
+    setSearchTerm(e.target.value);
+    setPagination((old) => ({ ...old, pageIndex: 0 }));
   };
 
   const columns = [
@@ -391,19 +370,15 @@ export default function SupportTicketsTable() {
   const table = useReactTable({
     data: filteredData,
     columns,
-    state: { sorting, pageIndex },
+    state: { sorting, pagination },
     onSortingChange: setSorting,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualPagination: true,
-    pageCount: Math.ceil(totalCount / pageSize),
+    pageCount: totalCount > 0 ? Math.ceil(totalCount / pagination.pageSize) : 1,
     debugTable: true,
   });
-
-  const handleSearch = (e) => {
-    setSearchTerm(e.target.value);
-    setPageIndex(0);
-  };
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -421,7 +396,7 @@ export default function SupportTicketsTable() {
           </Text>
           <Menu />
         </Flex>
-        <Flex px="25px" mb="8px">
+        <Flex px="25px" mb="8px" justifyContent="space-between" align="center">
           <InputGroup maxW="300px">
             <InputLeftElement pointerEvents="none">
               <FaSearch color="gray.300" />
@@ -433,11 +408,37 @@ export default function SupportTicketsTable() {
               onChange={handleSearch}
             />
           </InputGroup>
+          <Flex align="center">
+            <Select
+              value={pagination.pageSize}
+              onChange={(e) => setPagination((old) => ({ ...old, pageSize: Number(e.target.value), pageIndex: 0 }))}
+              w="100px"
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </Select>
+            <IconButton
+              icon={<ChevronLeftIcon />}
+              onClick={() => table.setPageIndex(pagination.pageIndex - 1)}
+              isDisabled={pagination.pageIndex === 0}
+              ml="2"
+            />
+            <Text mx="2" minW="150px" textAlign="center">
+              Page {pagination.pageIndex + 1} of {table.getPageCount() || 1} ({totalCount} total)
+            </Text>
+            <IconButton
+              icon={<ChevronRightIcon />}
+              onClick={() => table.setPageIndex(pagination.pageIndex + 1)}
+              isDisabled={pagination.pageIndex >= table.getPageCount() - 1}
+            />
+          </Flex>
         </Flex>
         <Box overflowY="auto" maxH="500px">
           {loading ? (
             <Stack>
-              {[...Array(pageSize)].map((_, i) => (
+              {[...Array(pagination.pageSize)].map((_, i) => (
                 <Skeleton key={i} height="40px" />
               ))}
             </Stack>
@@ -492,16 +493,7 @@ export default function SupportTicketsTable() {
             </Table>
           )}
         </Box>
-        <Flex justifyContent="center" mt="4">
-          <Pagination
-            currentPage={pageIndex + 1}
-            totalCount={totalCount}
-            pageSize={pageSize}
-            onPageChange={(page) => setPageIndex(page - 1)}
-          />
-        </Flex>
       </Card>
-
       <Modal isOpen={isModalOpen} onClose={closeModal} size="lg">
         <ModalOverlay />
         <ModalContent>
