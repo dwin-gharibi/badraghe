@@ -1,11 +1,11 @@
-/* eslint-disable */
 import React, { useEffect, useState } from 'react';
-import { SimpleGrid, Text, useColorModeValue, Button, Flex } from '@chakra-ui/react';
+import { SimpleGrid, Text, useColorModeValue, Button, Flex, Icon } from '@chakra-ui/react';
 import Card from 'components/card/Card';
 import Information from 'views/user/profile/components/Information';
 import { getUserProfile, getUnreadNotificationCount } from 'services/api';
 import { useToast } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
+import { FaUser } from 'react-icons/fa';
 
 export default function ProfileView() {
   const [profile, setProfile] = useState({});
@@ -50,10 +50,10 @@ export default function ProfileView() {
     <Card mb={{ base: '0px', '2xl': '20px' }}>
       <Flex justifyContent="space-between" align="center" mb="20px">
         <Text color={textColorPrimary} fontWeight="bold" fontSize="2xl" mt="10px">
-          Profile Information
+          <Icon as={FaUser} color="brand.500" w={5} h={5} mx={2}/> Profile Information
         </Text>
       </Flex>
-      <Text color={textColorSecondary} fontSize="md" me="26px" mb="40px">
+      <Text color={textColorSecondary} fontSize="md" me="26px" mb="40px" mx={2}>
         View your personal details and account information below.
       </Text>
       <SimpleGrid columns={{ sm: 1, md: 2 }} gap="20px">
@@ -83,8 +83,8 @@ export default function ProfileView() {
         <Information
           boxShadow="none"
 
-          title="Unread Notifications"
-          value={unreadCount.toString()}
+          title="Balance"
+          value={`${profile.balance} IRR`}
         />
         <Information
           boxShadow="none"

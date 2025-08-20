@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useEffect, useState } from 'react';
 import {
   SimpleGrid,
@@ -17,6 +16,7 @@ import { Flex, Box, Icon, Spacer } from "@chakra-ui/react";
 import Card from 'components/card/Card';
 import { updateUserProfile, getUserProfile } from 'services/api';
 import { useNavigate } from 'react-router-dom';
+import { FaUserEdit } from 'react-icons/fa';
 
 export default function ProfileEdit() {
   const [formData, setFormData] = useState({
@@ -114,9 +114,9 @@ export default function ProfileEdit() {
   return (
     <Card mb={{ base: '0px', '2xl': '20px' }}>
       <Text color={textColorPrimary} fontWeight="bold" fontSize="2xl" mt="10px" mb="4px">
-        Edit Profile
+        <Icon as={FaUserEdit} color="brand.500" w={5} h={5} mx={2}/> Edit Profile
       </Text>
-      <Text color={textColorSecondary} fontSize="md" me="26px" mb="40px">
+      <Text color={textColorSecondary} fontSize="md" me="26px" mb="40px" mx={2}>
         Update your personal details below.
       </Text>
       <SimpleGrid columns={{ sm: 1, md: 2 }} gap="20px">
