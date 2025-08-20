@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 from pydantic import BaseModel
 from app.db import execute_query, connect_db, close_db
@@ -35,6 +35,27 @@ class FullPaymentUpdate(BaseModel):
     status: str
     transaction_id: str
 
+@router.get("/count", response_model=Dict[str, int])
+async def get_payment_count(
+    current_user: dict = Depends(get_current_user),
+    user_id: int = None
+):
+    await connect_db()
+    query = """
+        SELECT COUNT(*) as count
+        FROM payments p
+        WHERE p.user_id = %s
+    """
+    params = (current_user["user_id"],)
+    if user_id:
+        query += " AND p.user_id = %s"
+        params = (current_user["user_id"], user_id)
+    
+    result = await execute_query(query, params, fetch_one=True)
+    await close_db()
+    return {"count": result["count"]}
+
+
 @router.get("/refunds", response_model=List[dict])
 async def list_refund_requests(current_user: dict = Depends(get_current_user)):
     await connect_db()
@@ -52,6 +73,26 @@ async def list_refund_requests(current_user: dict = Depends(get_current_user)):
     )
     await close_db()
     return refunds
+
+@router.get("/refunds/count", response_model=Dict[str, int])
+async def get_refund_request_count(
+    current_user: dict = Depends(get_current_user),
+    user_id: int = None
+):
+    await connect_db()
+    query = """
+        SELECT COUNT(*) as count
+        FROM refund_requests rr
+        WHERE rr.user_id = %s
+    """
+    params = (current_user["user_id"],)
+    if user_id:
+        query += " AND rr.user_id = %s"
+        params = (current_user["user_id"], user_id)
+    
+    result = await execute_query(query, params, fetch_one=True)
+    await close_db()
+    return {"count": result["count"]}
 
 @router.post("/refunds/{refund_id}/action", dependencies=[Depends(require_roles("admin"))])
 async def handle_refund(refund_id: int, action_data: RefundAction):
