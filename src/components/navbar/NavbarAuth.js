@@ -384,9 +384,6 @@ export default function AuthNavbar(props) {
         onMouseLeave={onCloseNft}
         cursor='pointer'
         position='relative'>
-        <Text fontSize='sm' color={mainText}>
-          NFTs
-        </Text>
         <Box>
           <Icon
             mt='8px'

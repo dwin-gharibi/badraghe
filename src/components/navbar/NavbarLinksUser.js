@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import {
   Avatar,
@@ -21,6 +20,7 @@ import { FaCoins } from 'react-icons/fa';
 import { SearchBar } from 'components/navbar/searchBar/SearchBar';
 import { SidebarResponsive } from 'components/sidebar/Sidebar';
 import { ItemContent } from 'components/menu/ItemContent';
+import api from '../../services/api'
 import PropTypes from 'prop-types';
 import { MdNotificationsNone, MdInfoOutline } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
