@@ -16,7 +16,7 @@ function SidebarContent(props) {
       </Stack>
 
       <Box
-        mt='60px'
+        mt='10px'
         mb='40px'
         borderRadius='30px'>
         <SidebarCard />

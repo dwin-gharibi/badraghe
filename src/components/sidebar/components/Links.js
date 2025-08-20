@@ -55,7 +55,7 @@ export function SidebarLinks(props) {
         return (
           <NavLink key={index} to={route.layout + route.path}>
             {route.icon ? (
-              <Box>
+              <Box zIndex={10}>
                 <HStack
                   spacing={
                     activeRoute(route.path.toLowerCase()) ? "22px" : "26px"
@@ -73,6 +73,7 @@ export function SidebarLinks(props) {
                       {route.icon}
                     </Box>
                     <Text
+                    zIndex={10}
                       me='auto'
                       color={
                         activeRoute(route.path.toLowerCase())
@@ -105,6 +106,7 @@ export function SidebarLinks(props) {
                   spacing={
                     activeRoute(route.path.toLowerCase()) ? "22px" : "26px"
                   }
+                  zIndex={10}
                   py='5px'
                   ps='10px'>
                   <Text
