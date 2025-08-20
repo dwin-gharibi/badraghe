@@ -409,7 +409,6 @@ export const RocketIcon = createIcon({
 export const SettingsIcon = createIcon({
   displayName: "SettingsIcon",
   viewBox: "0 0 24 24",
-  // path can also be an array of elements, if you have multiple paths, lines, shapes, etc.
   path: (
     <g>
       <path d='M0,0h24v24H0V0z' fill='none' />
