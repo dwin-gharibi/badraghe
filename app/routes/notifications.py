@@ -263,6 +263,25 @@ async def get_notification_details(
     
     return notification
 
+@router.get("/count", response_model=Dict[str, int])
+async def get_notification_count(
+    current_user: dict = Depends(get_current_user),
+    unread_only: bool = False
+):
+    await connect_db()
+    query = """
+        SELECT COUNT(*) as count
+        FROM notifications n
+        WHERE n.user_id = %s
+    """
+    params = (current_user["user_id"],)
+    if unread_only:
+        query += " AND n.is_read = FALSE"
+    
+    result = await execute_query(query, params, fetch_one=True)
+    await close_db()
+    return {"count": result["count"]}
+
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=NotificationResponse)
 async def create_notification(
     notification: NotificationCreate,
