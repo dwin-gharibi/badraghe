@@ -639,6 +639,7 @@ async def get_user_reservation_history(
             detail="Not authorized to view this user's reservations"
         )
     
+    await connect_db()
     query = """
     SELECT r.*, 
            t.departure_city, t.arrival_city, t.departure_time, 
