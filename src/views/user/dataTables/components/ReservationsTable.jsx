@@ -33,11 +33,12 @@ import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, use
 import { useNavigate } from 'react-router-dom';
 import Card from 'components/card/Card';
 import Menu from 'components/menu/MainMenu';
-import { getUserReservationHistory, cancelReservation, getReservation, getCancellationPenalty, payForReservation } from 'services/api';
+import { getUserReservationHistory, cancelReservation, getReservation, getCancellationPenalty, payForReservation, getPaymentMethods } from 'services/api';
 import { useToast } from '@chakra-ui/react';
-import { FaEye, FaTrash, FaIdBadge, FaTicketAlt, FaCheckCircle, FaDollarSign, FaClock, FaCreditCard, FaPlane, FaTrain, FaBus } from 'react-icons/fa';
+import { FaEye, FaTrash, FaIdBadge, FaTicketAlt, FaCheckCircle, FaDollarSign, FaClock, FaCreditCard, FaPlane, FaTrain, FaBus, FaCross, FaExclamationCircle } from 'react-icons/fa';
 import { ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
 import { useAuth } from '../../../../useAuth';
+import dayjs from 'dayjs';
 
 const fadeIn = keyframes`
   from { opacity: 0; transform: translateY(10px); }
@@ -45,6 +46,11 @@ const fadeIn = keyframes`
 `;
 
 const columnHelper = createColumnHelper();
+
+const addTenMinutes = (dateTime) => {
+  if (!dateTime) return null;
+  return dayjs(dateTime).add(10, 'minute').toISOString();
+};
 
 export default function ReservationsTable() {
   const [sorting, setSorting] = useState([]);
@@ -66,6 +72,9 @@ export default function ReservationsTable() {
   const [modalLoading, setModalLoading] = useState(false);
   const [cancelPenalty, setCancelPenalty] = useState(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
+  const [paymentMethodsError, setPaymentMethodsError] = useState(null);
   const textColor = useColorModeValue('secondaryGray.900', 'white');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
@@ -90,7 +99,6 @@ export default function ReservationsTable() {
           payment_id: filters.payment_id || null,
         });
         setData(response.data || response);
-        console.log(response)
         setTotalCount(response.total || response?.length || 0);
       } catch (err) {
         setError(err.response?.data?.detail || err.message || 'Failed to fetch reservations');
@@ -107,6 +115,28 @@ export default function ReservationsTable() {
     };
     fetchReservations();
   }, [pagination.pageIndex, pagination.pageSize, userId, filters, toast]);
+
+  useEffect(() => {
+    const fetchPaymentMethods = async () => {
+      setPaymentMethodsLoading(true);
+      try {
+        const response = await getPaymentMethods();
+        setPaymentMethods(response.data || response);
+      } catch (err) {
+        setPaymentMethodsError(err.response?.data?.detail || err.message || 'Failed to fetch payment methods');
+        toast({
+          title: 'Error',
+          description: err.response?.data?.detail || err.message || 'Failed to fetch payment methods',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      } finally {
+        setPaymentMethodsLoading(false);
+      }
+    };
+    fetchPaymentMethods();
+  }, [toast]);
 
   useEffect(() => {
     if (!filters.ticket_id && !filters.status && !filters.payment_id) {
@@ -187,7 +217,7 @@ export default function ReservationsTable() {
         payment_id: filters.payment_id || null,
       });
       setData(response.data || response);
-      setTotalCount(response.total || response.data?.length || 0);
+      setTotalCount(response.total || response?.length || 0);
       setIsCancelModalOpen(false);
       setCancelPenalty(null);
       setSelectedReservation(null);
@@ -219,30 +249,26 @@ export default function ReservationsTable() {
       return;
     }
     try {
-      await payForReservation(selectedReservation.id, { payment_method_id: Number(selectedPaymentMethod) });
+      const response = await payForReservation(selectedReservation.id, {
+        payment_method_id: Number(selectedPaymentMethod),
+        amount: selectedReservation.ticket_details.price,
+        currency: selectedReservation.ticket_details.currency,
+      });
       toast({
-        title: 'Success',
-        description: 'Payment processed successfully',
-        status: 'success',
+        title: 'Redirecting to Payment',
+        description: 'You will be redirected to the payment gateway to complete your transaction.',
+        status: 'info',
         duration: 5000,
         isClosable: true,
       });
-      const response = await getUserReservationHistory(userId, {
-        limit: pagination.pageSize,
-        skip: pagination.pageIndex * pagination.pageSize,
-        ticket_id: filters.ticket_id || null,
-        reservation_status: filters.status || null,
-        payment_id: filters.payment_id || null,
-      });
-      setData(response.data || response);
-      setTotalCount(response.total || response.data?.length || 0);
       setIsPayModalOpen(false);
       setSelectedPaymentMethod('');
       setSelectedReservation(null);
+      window.location.href = response.payment_url;
     } catch (err) {
       toast({
         title: 'Error',
-        description: err.response?.data?.detail || err.message || 'Failed to process payment',
+        description: err.response?.data?.detail || err.message || 'Failed to initiate payment',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -339,7 +365,11 @@ export default function ReservationsTable() {
           EXPIRES AT
         </Flex>
       ),
-      cell: (info) => <Text color={textColor} fontSize="sm" fontWeight="700">{formatDateTime(info.getValue())}</Text>,
+      cell: (info) => {
+        const reservedAt = info.row.original.reserved_at;
+        const expiresAt = addTenMinutes(reservedAt);
+        return <Text color={textColor} fontSize="sm" fontWeight="700">{formatDateTime(expiresAt)}</Text>;
+      },
     }),
     columnHelper.accessor('payment_id', {
       id: 'payment_id',
@@ -522,7 +552,7 @@ export default function ReservationsTable() {
             transition="transform 0.2s"
           />
           <IconButton
-            icon={<FaTrash />}
+            icon={<FaExclamationCircle />}
             colorScheme="red"
             aria-label="Cancel"
             onClick={() => handleCancel(info.row.original.id)}
@@ -717,7 +747,7 @@ export default function ReservationsTable() {
                 <Text><strong>Price Paid:</strong> {selectedReservation.price_paid || 'N/A'}</Text>
                 <Text><strong>Currency:</strong> {selectedReservation.currency || 'N/A'}</Text>
                 <Text><strong>Reserved At:</strong> {formatDateTime(selectedReservation.reserved_at)}</Text>
-                <Text><strong>Expires At:</strong> {formatDateTime(selectedReservation.expires_at)}</Text>
+                <Text><strong>Expires At:</strong> {formatDateTime(addTenMinutes(selectedReservation.reserved_at))}</Text>
                 <Text><strong>Payment ID:</strong> {selectedReservation.payment_id || 'N/A'}</Text>
                 <Text><strong>Departure City:</strong> {selectedReservation.ticket_details?.departure_city || 'N/A'}</Text>
                 <Text><strong>Arrival City:</strong> {selectedReservation.ticket_details?.arrival_city || 'N/A'}</Text>
@@ -751,22 +781,38 @@ export default function ReservationsTable() {
           <ModalBody>
             <VStack spacing={4}>
               <Text>Select a payment method to proceed with the payment.</Text>
-              <FormControl>
-                <FormLabel>Payment Method</FormLabel>
-                <Select
-                  placeholder="Select payment method"
-                  value={selectedPaymentMethod}
-                  onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-                >
-                  <option value="1">Credit Card</option>
-                  <option value="2">Debit Card</option>
-                  <option value="3">PayPal</option>
-                </Select>
-              </FormControl>
+              {paymentMethodsError ? (
+                <Text color="red.500">{paymentMethodsError}</Text>
+              ) : (
+                <FormControl>
+                  <FormLabel>Payment Method</FormLabel>
+                  {paymentMethodsLoading ? (
+                    <Skeleton height="40px" />
+                  ) : (
+                    <Select
+                      placeholder="Select payment method"
+                      value={selectedPaymentMethod}
+                      onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                      isDisabled={paymentMethods.length === 0}
+                    >
+                      {paymentMethods.map((method) => (
+                        <option key={method.id} value={method.id}>
+                          {method.name}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </FormControl>
+              )}
             </VStack>
           </ModalBody>
           <ModalFooter>
-            <Button colorScheme="blue" mr={3} onClick={confirmPay} isDisabled={!selectedPaymentMethod}>
+            <Button
+              colorScheme="blue"
+              mr={3}
+              onClick={confirmPay}
+              isDisabled={!selectedPaymentMethod || paymentMethodsLoading || paymentMethodsError}
+            >
               Confirm Payment
             </Button>
             <Button variant="ghost" onClick={closePayModal}>
