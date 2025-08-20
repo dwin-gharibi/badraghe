@@ -1,11 +1,14 @@
 import React from "react";
 import { Button, Flex, Link, Text } from "@chakra-ui/react";
 
+import banner from "assets/img/auth/dashboard-banner.png";
+
 export default function Banner() {
   return (
     <Flex
       direction='column'
       bgSize='cover'
+      bgImage={banner}
       py={{ base: "30px", md: "56px" }}
       px={{ base: "30px", md: "64px" }}
       borderRadius='30px'>
@@ -23,7 +26,7 @@ export default function Banner() {
         }}
         fontWeight='700'
         lineHeight={{ base: "32px", md: "42px" }}>
-        Discover, collect, and sell extraordinary NFTs
+        Discover seamless travel with Badraghe
       </Text>
       <Text
         fontSize='md'
@@ -39,8 +42,8 @@ export default function Banner() {
         fontWeight='500'
         mb='40px'
         lineHeight='28px'>
-        Enter in this creative world. Discover now the latest NFTs or start
-        creating your own!
+        From buses to planes, we connect you with the tickets you need at the prices you love.
+        Travel made easy, reliable, and built around you.
       </Text>
       <Flex align='center'>
         <Button
@@ -51,14 +54,16 @@ export default function Banner() {
           _focus={{ bg: "white" }}
           fontWeight='500'
           fontSize='14px'
+          as={Link}
+          to="/user/reserve"
           py='20px'
           px='27'
           me='38px'>
-          Discover now
+          Buy a ticket now
         </Button>
         <Link>
           <Text color='white' fontSize='sm' fontWeight='500'>
-            Watch video
+            Learn more
           </Text>
         </Link>
       </Flex>
