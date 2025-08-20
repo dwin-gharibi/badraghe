@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from app.db import execute_query, connect_db, close_db
 from app.utils.auth_util import require_roles, get_current_user
 import httpx
-
+from fastapi.responses import RedirectResponse
 
 router = APIRouter(prefix="/payments")
 
@@ -388,8 +388,7 @@ async def verify_payment(
             "UPDATE user_reservations SET status = 'paid', payment_id = %s, updated_at = NOW() WHERE id = %s",
             (payment["id"], reservation_id)
         )
-        return {"message": "Payment verified successfully"}
-
+        return RedirectResponse(url=f"https://badraghe.dwin.codes/user/reservations")
     else:
         await execute_query(
             "UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = %s", (payment["id"],)
