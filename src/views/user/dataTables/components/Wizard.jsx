@@ -19,6 +19,7 @@ import {
   StepNumber,
   StepSeparator,
   StepStatus,
+  Skeleton,
   StepTitle,
   Stepper,
   Icon,
